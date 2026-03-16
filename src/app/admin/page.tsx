@@ -409,7 +409,7 @@ export default function AdminDashboard() {
                   {[{label:'Question Bank',s:'questions'},{label:'AI Import',s:'questions',ai:true},{label:'Bulk Import',href:'/admin/import'},{label:'Exam Templates',s:'templates'},{label:'Users',s:'users'},{label:'Reports',s:'reports'}].map(a => (
                     a.href
                       ? <a key={a.label} href={a.href} style={{padding:'8px 14px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'13px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>{a.label} →</a>
-                      : <button key={a.label} onClick={() => { setActiveSection(a.s); if(a.ai) setTimeout(()=>setShowAI(true),100) }} style={{padding:'8px 14px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'13px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>{a.label} →</button>
+                      : <button key={a.label} onClick={() => { setActiveSection(a.s ?? 'dashboard'); if(a.ai) setTimeout(()=>setShowAI(true),100) }} style={{padding:'8px 14px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'13px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>{a.label} →</button>
                   ))}
                 </div>
               </div>
