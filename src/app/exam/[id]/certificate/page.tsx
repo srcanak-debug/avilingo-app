@@ -38,9 +38,18 @@ export default function CertificatePage() {
 
     const { data: examData } = await supabase
       .from('exams')
-      .select('*,exam_templates(*),users(full_name,email,organizations(name))')
+      .select('*,exam_templates(*)')
       .eq('id', examId)
       .single()
+
+    if (examData) {
+      const { data: candidateData } = await supabase
+        .from('users')
+        .select('full_name,email,organizations(name)')
+        .eq('id', examData.candidate_id)
+        .single()
+      examData.users = candidateData
+    }
 
     if (!examData) { router.push('/exam'); return }
     setExam(examData)
