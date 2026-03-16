@@ -44,6 +44,35 @@ export default function AdminDashboard() {
   const [adminId, setAdminId] = useState('')
   const [activeSection, setActiveSection] = useState('dashboard')
 
+  // Template state
+  const [templates, setTemplates] = useState<any[]>([])
+  const [tLoading, setTLoading] = useState(false)
+  const [showTemplateForm, setShowTemplateForm] = useState(false)
+  const [editTemplate, setEditTemplate] = useState<any>(null)
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [newTemplate, setNewTemplate] = useState({
+    name: '',
+    role_profile: 'general',
+    grammar_count: 15,
+    reading_count: 5,
+    writing_count: 3,
+    speaking_count: 4,
+    listening_count: 8,
+    weight_grammar: 10,
+    weight_reading: 20,
+    weight_writing: 20,
+    weight_speaking: 40,
+    weight_listening: 10,
+    time_limit_mins: 90,
+    writing_timer_mins: 3.5,
+    speaking_attempts: 3,
+    listening_single_play: true,
+    passing_cefr: 'B2',
+    proctoring_enabled: true,
+    attempts_allowed: 1,
+    org_id: null
+  })
+
   // Question bank state
   const [questions, setQuestions] = useState<any[]>([])
   const [qLoading, setQLoading] = useState(false)
@@ -90,6 +119,7 @@ export default function AdminDashboard() {
 
   useEffect(() => { checkAuth(); loadStats(); loadTaxonomy() }, [])
   useEffect(() => { if (activeSection === 'questions') { setQPage(0); loadQuestions(0) } }, [activeSection, qFilter, qSearch, qCefr, qDifficulty])
+  useEffect(() => { if (activeSection === 'templates') loadTemplates() }, [activeSection])
 
   async function checkAuth() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -120,6 +150,54 @@ export default function AdminDashboard() {
     setDepartments(d.data||[])
     setSubRoles(s.data||[])
     setUseCases(u.data||[])
+  }
+
+  async function loadTemplates() {
+    setTLoading(true)
+    const { data } = await supabase.from('exam_templates').select('*, organizations(name)').order('created_at', {ascending:false})
+    setTemplates(data||[])
+    setTLoading(false)
+  }
+
+  async function saveTemplate() {
+    if (!newTemplate.name.trim()) return
+    setSavingTemplate(true)
+    const total = newTemplate.weight_grammar + newTemplate.weight_reading + newTemplate.weight_writing + newTemplate.weight_speaking + newTemplate.weight_listening
+    if (Math.abs(total - 100) > 0.1) { alert('Weights must add up to 100%. Current total: ' + total + '%'); setSavingTemplate(false); return }
+    if (editTemplate) {
+      await supabase.from('exam_templates').update(newTemplate).eq('id', editTemplate.id)
+    } else {
+      await supabase.from('exam_templates').insert(newTemplate)
+    }
+    setSavingTemplate(false)
+    setShowTemplateForm(false)
+    setEditTemplate(null)
+    resetTemplateForm()
+    loadTemplates()
+  }
+
+  function resetTemplateForm() {
+    setNewTemplate({ name:'', role_profile:'general', grammar_count:15, reading_count:5, writing_count:3, speaking_count:4, listening_count:8, weight_grammar:10, weight_reading:20, weight_writing:20, weight_speaking:40, weight_listening:10, time_limit_mins:90, writing_timer_mins:3.5, speaking_attempts:3, listening_single_play:true, passing_cefr:'B2', proctoring_enabled:true, attempts_allowed:1, org_id:null })
+    setEditTemplate(null)
+    setShowTemplateForm(false)
+  }
+
+  function startEditTemplate(t: any) {
+    setEditTemplate(t)
+    setNewTemplate({ name:t.name, role_profile:t.role_profile, grammar_count:t.grammar_count, reading_count:t.reading_count, writing_count:t.writing_count, speaking_count:t.speaking_count, listening_count:t.listening_count, weight_grammar:t.weight_grammar, weight_reading:t.weight_reading, weight_writing:t.weight_writing, weight_speaking:t.weight_speaking, weight_listening:t.weight_listening, time_limit_mins:t.time_limit_mins, writing_timer_mins:t.writing_timer_mins||3.5, speaking_attempts:t.speaking_attempts||3, listening_single_play:t.listening_single_play!==false, passing_cefr:t.passing_cefr, proctoring_enabled:t.proctoring_enabled!==false, attempts_allowed:t.attempts_allowed||1, org_id:t.org_id||null })
+    setShowTemplateForm(true)
+  }
+
+  async function deleteTemplate(id: string) {
+    if (!confirm('Delete this template?')) return
+    await supabase.from('exam_templates').delete().eq('id', id)
+    loadTemplates()
+  }
+
+  async function duplicateTemplate(t: any) {
+    const { name, role_profile, grammar_count, reading_count, writing_count, speaking_count, listening_count, weight_grammar, weight_reading, weight_writing, weight_speaking, weight_listening, time_limit_mins, passing_cefr, proctoring_enabled, attempts_allowed } = t
+    await supabase.from('exam_templates').insert({ name: name + ' (Copy)', role_profile, grammar_count, reading_count, writing_count, speaking_count, listening_count, weight_grammar, weight_reading, weight_writing, weight_speaking, weight_listening, time_limit_mins, passing_cefr, proctoring_enabled, attempts_allowed })
+    loadTemplates()
   }
 
   async function loadQuestions(page = qPage) {
@@ -805,7 +883,161 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {activeSection !== 'dashboard' && activeSection !== 'questions' && (
+          {/* EXAM TEMPLATES */}
+          {activeSection === 'templates' && (
+            <div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+                <div>
+                  <h2 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'3px'}}>Exam Templates</h2>
+                  <p style={{fontSize:'12.5px',color:'var(--t3)'}}>Configure section order, question counts, weights and timers per role profile.</p>
+                </div>
+                <button onClick={()=>{resetTemplateForm();setShowTemplateForm(true)}} style={{padding:'10px 18px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>+ New Template</button>
+              </div>
+
+              {showTemplateForm && (
+                <div style={{background:'#fff',borderRadius:'14px',padding:'24px',border:'2px solid var(--sky)',marginBottom:'20px'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:'18px'}}>
+                    <h3 style={{fontFamily:'var(--fm)',fontSize:'15px',fontWeight:800,color:'var(--navy)',margin:0}}>{editTemplate?'Edit Template':'New Exam Template'}</h3>
+                    <button onClick={resetTemplateForm} style={{padding:'5px 12px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'12px',color:'var(--t2)',fontFamily:'var(--fb)'}}>Cancel</button>
+                  </div>
+
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px',marginBottom:'16px'}}>
+                    <div style={{gridColumn:'1/-1'}}>
+                      <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Template Name *</label>
+                      <input value={newTemplate.name} onChange={e=>setNewTemplate({...newTemplate,name:e.target.value})} placeholder="e.g. ICAO Cabin Crew Recruitment" style={{padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)'}} />
+                    </div>
+                    <div>
+                      <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Role Profile</label>
+                      <select value={newTemplate.role_profile} onChange={e=>setNewTemplate({...newTemplate,role_profile:e.target.value})} style={{padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)'}}>
+                        {['general','flight_deck','cabin_crew','atc','maintenance','ground_staff'].map(r=><option key={r} value={r}>{r.replace('_',' ').replace(/\w/g,c=>c.toUpperCase())}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Passing CEFR</label>
+                      <select value={newTemplate.passing_cefr} onChange={e=>setNewTemplate({...newTemplate,passing_cefr:e.target.value})} style={{padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)'}}>
+                        {['A1','A2','B1','B2','C1'].map(l=><option key={l} value={l}>{l}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Total Time (mins)</label>
+                      <input type="number" value={newTemplate.time_limit_mins} onChange={e=>setNewTemplate({...newTemplate,time_limit_mins:+e.target.value})} style={{padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)'}} min={30} max={240} />
+                    </div>
+                  </div>
+
+                  <div style={{background:'var(--off)',borderRadius:'10px',padding:'16px',marginBottom:'16px'}}>
+                    <h4 style={{fontFamily:'var(--fm)',fontSize:'13px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Section Configuration</h4>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'10px',marginBottom:'4px'}}>
+                      {['grammar','reading','writing','speaking','listening'].map(s=>(
+                        <div key={s} style={{textAlign:'center',fontSize:'11px',fontWeight:700,color:sectionColors[s],textTransform:'capitalize',padding:'4px',borderRadius:'6px',background:sectionColors[s]+'15'}}>{s}</div>
+                      ))}
+                    </div>
+                    <div style={{marginBottom:'8px'}}>
+                      <div style={{fontSize:'11.5px',fontWeight:600,color:'var(--t2)',marginBottom:'6px'}}>Question Count</div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'10px'}}>
+                        {[['grammar_count','grammar'],['reading_count','reading'],['writing_count','writing'],['speaking_count','speaking'],['listening_count','listening']].map(([k,s])=>(
+                          <input key={k} type="number" value={(newTemplate as any)[k]} onChange={e=>setNewTemplate({...newTemplate,[k]:+e.target.value})} min={0} max={50} style={{padding:'7px',borderRadius:'7px',border:'2px solid '+sectionColors[s],fontSize:'14px',fontWeight:700,textAlign:'center',color:sectionColors[s],fontFamily:'var(--fb)',background:'#fff'}} />
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
+                        <div style={{fontSize:'11.5px',fontWeight:600,color:'var(--t2)'}}>Weight (%)</div>
+                        <div style={{fontSize:'11.5px',color: Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening)-100) < 0.1 ? '#27500A' : '#DC2626', fontWeight:700}}>
+                          Total: {newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening}% {Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening)-100) < 0.1 ? '✓' : '(must = 100%)'}
+                        </div>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'10px'}}>
+                        {[['weight_grammar','grammar'],['weight_reading','reading'],['weight_writing','writing'],['weight_speaking','speaking'],['weight_listening','listening']].map(([k,s])=>(
+                          <input key={k} type="number" value={(newTemplate as any)[k]} onChange={e=>setNewTemplate({...newTemplate,[k]:+e.target.value})} min={0} max={100} style={{padding:'7px',borderRadius:'7px',border:'2px solid '+sectionColors[s],fontSize:'14px',fontWeight:700,textAlign:'center',color:sectionColors[s],fontFamily:'var(--fb)',background:'#fff'}} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{background:'var(--off)',borderRadius:'10px',padding:'16px',marginBottom:'16px'}}>
+                    <h4 style={{fontFamily:'var(--fm)',fontSize:'13px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Section Rules</h4>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Writing Timer (mins/question)</label>
+                        <input type="number" value={newTemplate.writing_timer_mins} onChange={e=>setNewTemplate({...newTemplate,writing_timer_mins:+e.target.value})} step={0.5} min={1} max={15} style={{padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)'}} />
+                      </div>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Speaking Max Attempts</label>
+                        <input type="number" value={newTemplate.speaking_attempts} onChange={e=>setNewTemplate({...newTemplate,speaking_attempts:+e.target.value})} min={1} max={5} style={{padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)'}} />
+                      </div>
+                      <div>
+                        <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Candidate Attempts Allowed</label>
+                        <input type="number" value={newTemplate.attempts_allowed} onChange={e=>setNewTemplate({...newTemplate,attempts_allowed:+e.target.value})} min={1} max={10} style={{padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)'}} />
+                      </div>
+                    </div>
+                    <div style={{display:'flex',gap:'20px',marginTop:'12px'}}>
+                      <label style={{display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',cursor:'pointer'}}>
+                        <input type="checkbox" checked={newTemplate.listening_single_play} onChange={e=>setNewTemplate({...newTemplate,listening_single_play:e.target.checked})} />
+                        <span style={{fontWeight:500,color:'var(--t1)'}}>Listening single-play rule (audio plays once only)</span>
+                      </label>
+                      <label style={{display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',cursor:'pointer'}}>
+                        <input type="checkbox" checked={newTemplate.proctoring_enabled} onChange={e=>setNewTemplate({...newTemplate,proctoring_enabled:e.target.checked})} />
+                        <span style={{fontWeight:500,color:'var(--t1)'}}>Enable WebRTC proctoring</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div style={{display:'flex',gap:'10px'}}>
+                    <button onClick={saveTemplate} disabled={savingTemplate} style={{padding:'10px 28px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>
+                      {savingTemplate?'Saving...':editTemplate?'Update Template':'Save Template'}
+                    </button>
+                    <button onClick={resetTemplateForm} style={{padding:'10px 18px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',color:'var(--t2)',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>Cancel</button>
+                  </div>
+                </div>
+              )}
+
+              {tLoading ? (
+                <div style={{textAlign:'center',padding:'40px',color:'var(--t3)'}}>Loading templates...</div>
+              ) : templates.length === 0 ? (
+                <div style={{background:'#fff',borderRadius:'14px',padding:'50px',border:'1px solid var(--bdr)',textAlign:'center'}}>
+                  <div style={{fontSize:'32px',marginBottom:'10px'}}>📋</div>
+                  <h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'6px'}}>No templates yet</h3>
+                  <p style={{fontSize:'13px',color:'var(--t3)',marginBottom:'16px'}}>Create your first exam template to start assigning exams to candidates.</p>
+                  <button onClick={()=>setShowTemplateForm(true)} style={{padding:'10px 20px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>+ New Template</button>
+                </div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+                  {templates.map(t=>(
+                    <div key={t.id} style={{background:'#fff',borderRadius:'14px',padding:'20px',border:'1px solid var(--bdr)'}}>
+                      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'14px'}}>
+                        <div>
+                          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}}>
+                            <h3 style={{fontFamily:'var(--fm)',fontSize:'15px',fontWeight:800,color:'var(--navy)',margin:0}}>{t.name}</h3>
+                            <span style={{fontSize:'11px',fontWeight:700,padding:'2px 8px',borderRadius:'100px',background:'#E6EAF4',color:'#2A4070',textTransform:'capitalize'}}>{t.role_profile?.replace('_',' ')}</span>
+                            <span style={{fontSize:'11px',fontWeight:700,padding:'2px 8px',borderRadius:'100px',background:'var(--sky3)',color:'var(--sky)'}}>Pass: {t.passing_cefr}</span>
+                            {t.organizations && <span style={{fontSize:'11px',color:'var(--t3)'}}>— {t.organizations.name}</span>}
+                          </div>
+                          <div style={{fontSize:'12px',color:'var(--t3)'}}>{t.time_limit_mins} min total · {t.grammar_count+t.reading_count+t.writing_count+t.speaking_count+t.listening_count} questions · {t.proctoring_enabled?'Proctored':'No proctoring'}</div>
+                        </div>
+                        <div style={{display:'flex',gap:'6px'}}>
+                          <button onClick={()=>duplicateTemplate(t)} style={{padding:'5px 11px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11.5px',fontWeight:600,color:'var(--t2)',fontFamily:'var(--fb)'}}>Copy</button>
+                          <button onClick={()=>startEditTemplate(t)} style={{padding:'5px 11px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11.5px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>Edit</button>
+                          <button onClick={()=>deleteTemplate(t.id)} style={{padding:'5px 11px',borderRadius:'6px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'11.5px',fontWeight:600,color:'#DC2626',fontFamily:'var(--fb)'}}>Delete</button>
+                        </div>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px'}}>
+                        {[['grammar',t.grammar_count,t.weight_grammar],['reading',t.reading_count,t.weight_reading],['writing',t.writing_count,t.weight_writing],['speaking',t.speaking_count,t.weight_speaking],['listening',t.listening_count,t.weight_listening]].map(([s,count,weight])=>(
+                          <div key={s as string} style={{padding:'10px',borderRadius:'8px',background:sectionColors[s as string]+'12',border:'1px solid '+sectionColors[s as string]+'30',textAlign:'center'}}>
+                            <div style={{fontSize:'11px',fontWeight:700,color:sectionColors[s as string],textTransform:'capitalize',marginBottom:'4px'}}>{s}</div>
+                            <div style={{fontSize:'18px',fontWeight:700,color:'var(--navy)',fontFamily:'var(--fm)'}}>{count}</div>
+                            <div style={{fontSize:'11px',color:'var(--t3)'}}>questions</div>
+                            <div style={{fontSize:'12px',fontWeight:700,color:sectionColors[s as string],marginTop:'2px'}}>{weight}%</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSection !== 'dashboard' && activeSection !== 'questions' && activeSection !== 'templates' && (
             <div style={{background:'#fff',borderRadius:'14px',padding:'40px',border:'1px solid var(--bdr)',textAlign:'center'}}>
               <div style={{fontSize:'36px',marginBottom:'14px'}}>🚧</div>
               <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'6px',textTransform:'capitalize'}}>{activeSection} Panel</h3>
