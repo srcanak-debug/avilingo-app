@@ -37,20 +37,33 @@ export default function EvaluatorQueue() {
     setLoading(true)
 
     // Get all exam answers for writing/speaking that need grading
-    let query = supabase
+    const sections = filter === 'all' ? ['writing','speaking'] : [filter]
+    const { data: answers } = await supabase
       .from('exam_answers')
-      .select(`
-        *,
-        questions(content, section, type, competency_tag, cefr_level),
-        exams(id, status, candidate_id, exam_templates(name, role_profile, passing_cefr),
-          users:candidate_id(full_name, email, organizations(name)))
-      `)
-      .in('section', filter === 'all' ? ['writing','speaking'] : [filter])
+      .select('*,questions(content,section,type,competency_tag,cefr_level),exams(id,status,candidate_id,template_id,exam_templates(name,role_profile,passing_cefr))')
+      .in('section', sections)
       .not('answer', 'is', null)
       .neq('answer', '')
       .order('created_at', { ascending: true })
 
-    const { data: answers } = await query
+    // Load candidate info separately for each unique exam
+    const examIds = Array.from(new Set(answers?.map(a => a.exam_id) || []))
+    const candidateMap: Record<string,any> = {}
+    for (const eid of examIds) {
+      const exam = answers?.find(a => a.exam_id === eid)?.exams
+      if (exam?.candidate_id) {
+        const { data: cand } = await supabase
+          .from('users')
+          .select('full_name,email,organizations(name)')
+          .eq('id', exam.candidate_id)
+          .single()
+        candidateMap[eid] = cand
+      }
+    }
+    // Attach candidate data to answers
+    answers?.forEach(a => {
+      if (a.exams) a.exams.users = candidateMap[a.exam_id]
+    })
 
     // Get already graded items
     const { data: graded } = await supabase
