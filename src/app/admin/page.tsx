@@ -330,6 +330,27 @@ export default function AdminDashboard() {
 
   async function handleSignOut() { await supabase.auth.signOut(); router.push('/login') }
 
+  async function exportQuestions() {
+    let query = supabase.from('questions').select('*').eq('is_latest', true).order('section').order('cefr_level')
+    if (qFilter !== 'all') query = query.eq('section', qFilter)
+    if (qCefr !== 'all') query = query.eq('cefr_level', qCefr)
+    if (qDifficulty !== 'all') query = query.eq('difficulty', qDifficulty)
+    if (qSearch) query = query.ilike('content', '%' + qSearch + '%')
+    const { data } = await query
+    if (!data?.length) return
+    const headers = ['section','cefr_level','difficulty','type','content','correct_answer','competency_tag','aircraft_context','active']
+    const escape = (v: any) => { const s = String(v ?? '').replace(/"/g, '""'); return s.includes(',') || s.includes('\n') ? '"' + s + '"' : s }
+    const csv = [headers.join(','), ...data.map((q: any) => headers.map(h => escape(q[h])).join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'avilingo-questions-' + qFilter + '-' + new Date().toISOString().split('T')[0] + '.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+
   if (loading) return <div style={{minHeight:'100vh',background:'var(--navy)',display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{color:'#fff'}}>Loading...</div></div>
 
   const sections = ['grammar','reading','writing','speaking','listening']
