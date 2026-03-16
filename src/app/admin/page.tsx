@@ -160,16 +160,41 @@ export default function AdminDashboard() {
   }
 
   async function saveTemplate() {
-    if (!newTemplate.name.trim()) return
+    if (!newTemplate.name.trim()) { alert('Please enter a template name'); return }
     setSavingTemplate(true)
     const total = newTemplate.weight_grammar + newTemplate.weight_reading + newTemplate.weight_writing + newTemplate.weight_speaking + newTemplate.weight_listening
     if (Math.abs(total - 100) > 0.1) { alert('Weights must add up to 100%. Current total: ' + total + '%'); setSavingTemplate(false); return }
+    const payload = {
+      name: newTemplate.name,
+      role_profile: newTemplate.role_profile,
+      grammar_count: newTemplate.grammar_count,
+      reading_count: newTemplate.reading_count,
+      writing_count: newTemplate.writing_count,
+      speaking_count: newTemplate.speaking_count,
+      listening_count: newTemplate.listening_count,
+      weight_grammar: newTemplate.weight_grammar,
+      weight_reading: newTemplate.weight_reading,
+      weight_writing: newTemplate.weight_writing,
+      weight_speaking: newTemplate.weight_speaking,
+      weight_listening: newTemplate.weight_listening,
+      time_limit_mins: newTemplate.time_limit_mins,
+      writing_timer_mins: newTemplate.writing_timer_mins,
+      speaking_attempts: newTemplate.speaking_attempts,
+      listening_single_play: newTemplate.listening_single_play,
+      passing_cefr: newTemplate.passing_cefr,
+      proctoring_enabled: newTemplate.proctoring_enabled,
+      attempts_allowed: newTemplate.attempts_allowed,
+    }
+    let error = null
     if (editTemplate) {
-      await supabase.from('exam_templates').update(newTemplate).eq('id', editTemplate.id)
+      const res = await supabase.from('exam_templates').update(payload).eq('id', editTemplate.id)
+      error = res.error
     } else {
-      await supabase.from('exam_templates').insert(newTemplate)
+      const res = await supabase.from('exam_templates').insert(payload)
+      error = res.error
     }
     setSavingTemplate(false)
+    if (error) { alert('Error saving template: ' + error.message); return }
     setShowTemplateForm(false)
     setEditTemplate(null)
     resetTemplateForm()
