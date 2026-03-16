@@ -1,0 +1,497 @@
+'use client'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+
+const statusColor: Record<string,string> = {
+  pending:'#FAEEDA', in_progress:'#E6F1FB', completed:'#EAF3DE',
+  invalidated:'#FCEBEB', grading:'#F5F3FF', certified:'#D1FAE5'
+}
+const statusText: Record<string,string> = {
+  pending:'Pending', in_progress:'In Progress', completed:'Submitted',
+  invalidated:'Invalidated', grading:'Grading', certified:'Certified'
+}
+const cefrColors: Record<string,string> = {
+  A1:'#6B7280', A2:'#6B7280', B1:'#3A8ED0', B2:'#0A8870', C1:'#B8881A', C2:'#7C3AED'
+}
+
+export default function HRPortal() {
+  const router = useRouter()
+  const [hr, setHr] = useState<any>(null)
+  const [org, setOrg] = useState<any>(null)
+  const [candidates, setCandidates] = useState<any[]>([])
+  const [exams, setExams] = useState<any[]>([])
+  const [credits, setCredits] = useState<any[]>([])
+  const [templates, setTemplates] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'candidates'|'results'|'credits'|'reports'>('candidates')
+  const [search, setSearch] = useState('')
+  const [showAddCandidate, setShowAddCandidate] = useState(false)
+  const [showPurchaseCredits, setShowPurchaseCredits] = useState(false)
+  const [newCandidate, setNewCandidate] = useState({ email:'', full_name:'', template_id:'' })
+  const [creditAmount, setCreditAmount] = useState(10)
+  const [saving, setSaving] = useState(false)
+  const [assigningExam, setAssigningExam] = useState<string|null>(null)
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+
+  useEffect(() => { checkAuth() }, [])
+
+  async function checkAuth() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
+    const { data: userData } = await supabase
+      .from('users')
+      .select('*,organizations(*)')
+      .eq('id', user.id)
+      .single()
+    if (!userData || !['hr_manager','super_admin'].includes(userData.role)) { router.push('/login'); return }
+    setHr(userData)
+    setOrg(userData.organizations)
+    await loadData(userData.org_id)
+    setLoading(false)
+  }
+
+  async function loadData(orgId: string) {
+    const [{ data: candidateData }, { data: examData }, { data: creditData }, { data: templateData }] = await Promise.all([
+      supabase.from('users').select('*').eq('org_id', orgId).eq('role', 'candidate').order('created_at', { ascending: false }),
+      supabase.from('exams').select('*,exam_templates(name,passing_cefr),users:candidate_id(full_name,email)').eq('org_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('credits').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('exam_templates').select('*').order('name'),
+    ])
+    setCandidates(candidateData || [])
+    setExams(examData || [])
+    setCredits(creditData || [])
+    setTemplates(templateData || [])
+  }
+
+  async function addCandidate() {
+    if (!newCandidate.email || !newCandidate.full_name) return
+    setSaving(true)
+    const { error } = await supabase.from('users').insert({
+      email: newCandidate.email,
+      full_name: newCandidate.full_name,
+      role: 'candidate',
+      org_id: org.id
+    })
+    if (error) { alert('Error: ' + error.message); setSaving(false); return }
+    if (newCandidate.template_id) {
+      const { data: newUser } = await supabase.from('users').select('id').eq('email', newCandidate.email).single()
+      if (newUser) {
+        await supabase.from('exams').insert({
+          candidate_id: newUser.id,
+          template_id: newCandidate.template_id,
+          org_id: org.id,
+          status: 'pending'
+        })
+        // Deduct credit
+        if (org.credit_balance > 0) {
+          await supabase.from('organizations').update({ credit_balance: org.credit_balance - 1 }).eq('id', org.id)
+          setOrg((o: any) => ({ ...o, credit_balance: o.credit_balance - 1 }))
+        }
+      }
+    }
+    setSaving(false)
+    setShowAddCandidate(false)
+    setNewCandidate({ email:'', full_name:'', template_id:'' })
+    loadData(org.id)
+  }
+
+  async function assignExamToCandidate(candidateId: string) {
+    if (!selectedTemplate) return
+    setSaving(true)
+    await supabase.from('exams').insert({
+      candidate_id: candidateId,
+      template_id: selectedTemplate,
+      org_id: org.id,
+      status: 'pending'
+    })
+    if (org.credit_balance > 0) {
+      await supabase.from('organizations').update({ credit_balance: org.credit_balance - 1 }).eq('id', org.id)
+      setOrg((o: any) => ({ ...o, credit_balance: o.credit_balance - 1 }))
+    }
+    setSaving(false)
+    setAssigningExam(null)
+    setSelectedTemplate('')
+    loadData(org.id)
+  }
+
+  async function purchaseCredits() {
+    setSaving(true)
+    await supabase.from('credits').insert({ org_id: org.id, amount: creditAmount, used: 0, expires_at: new Date(Date.now() + 365*24*60*60*1000).toISOString() })
+    await supabase.from('organizations').update({ credit_balance: (org.credit_balance||0) + creditAmount }).eq('id', org.id)
+    const { data: invoice } = await supabase.from('invoices').insert({
+      org_id: org.id,
+      amount: creditAmount * 25,
+      vat_amount: creditAmount * 25 * 0.20,
+      status: 'draft',
+      due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString()
+    }).select().single()
+    setOrg((o: any) => ({ ...o, credit_balance: (o.credit_balance||0) + creditAmount }))
+    setSaving(false)
+    setShowPurchaseCredits(false)
+    loadData(org.id)
+    alert(`✅ ${creditAmount} credits added! Invoice #${invoice?.id?.substring(0,8).toUpperCase()} created for €${(creditAmount*25*1.20).toFixed(2)} (inc. 20% KDV)`)
+  }
+
+  async function downloadRoleFitReport(examId: string) {
+    const exam = exams.find(e => e.id === examId)
+    if (!exam) return
+    const { default: jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ unit:'mm', format:'a4' })
+    doc.setFillColor(12, 31, 63)
+    doc.rect(0, 0, 210, 40, 'F')
+    doc.setTextColor(255,255,255)
+    doc.setFontSize(20); doc.setFont('helvetica','bold')
+    doc.text('AVILINGO', 20, 18)
+    doc.setFontSize(10); doc.setFont('helvetica','normal')
+    doc.setTextColor(90,174,223)
+    doc.text('Role-Fit Assessment Report', 20, 26)
+    doc.setTextColor(255,255,255)
+    doc.setFontSize(8)
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} · Confidential`, 20, 33)
+
+    doc.setTextColor(12,31,63)
+    doc.setFontSize(14); doc.setFont('helvetica','bold')
+    doc.text('Candidate Profile', 20, 55)
+    doc.setFontSize(11); doc.setFont('helvetica','normal')
+    doc.text(`Name: ${exam.users?.full_name || exam.users?.email}`, 20, 65)
+    doc.text(`Organization: ${org?.name}`, 20, 72)
+    doc.text(`Assessment: ${exam.exam_templates?.name}`, 20, 79)
+    doc.text(`Date: ${new Date(exam.completed_at||exam.created_at).toLocaleDateString('en-GB')}`, 20, 86)
+
+    doc.setFillColor(240,249,255)
+    doc.rect(15, 95, 180, 35, 'F')
+    doc.setFontSize(24); doc.setFont('helvetica','bold')
+    doc.setTextColor(exam.final_cefr_score==='C1'||exam.final_cefr_score==='C2'?184:exam.final_cefr_score==='B2'?10:58,
+      exam.final_cefr_score==='C1'||exam.final_cefr_score==='C2'?136:exam.final_cefr_score==='B2'?136:142,
+      exam.final_cefr_score==='C1'||exam.final_cefr_score==='C2'?26:exam.final_cefr_score==='B2'?70:208)
+    doc.text(exam.final_cefr_score||'PENDING', 105, 117, { align:'center' })
+    doc.setFontSize(10); doc.setFont('helvetica','normal')
+    doc.setTextColor(100,100,100)
+    doc.text(`Overall CEFR Level · Score: ${exam.final_numeric_score||'—'}%`, 105, 125, { align:'center' })
+
+    const passed = ['A1','A2','B1','B2','C1','C2'].indexOf(exam.final_cefr_score) >= ['A1','A2','B1','B2','C1','C2'].indexOf(exam.exam_templates?.passing_cefr)
+    doc.setFillColor(passed?26:239, passed?209:68, passed?138:68)
+    doc.roundedRect(70, 133, 70, 10, 2, 2, 'F')
+    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold')
+    doc.text(passed?`✓ MEETS REQUIRED LEVEL (${exam.exam_templates?.passing_cefr})`:`✗ BELOW REQUIRED LEVEL (${exam.exam_templates?.passing_cefr})`, 105, 139.5, { align:'center' })
+
+    doc.setTextColor(12,31,63)
+    doc.setFontSize(12); doc.setFont('helvetica','bold')
+    doc.text('Recommendation', 20, 158)
+    doc.setFontSize(10); doc.setFont('helvetica','normal')
+    const rec = passed
+      ? `${exam.users?.full_name} has demonstrated the required aviation English proficiency at ${exam.final_cefr_score} level. This candidate MEETS the minimum language requirement of ${exam.exam_templates?.passing_cefr} and is RECOMMENDED for the role.`
+      : `${exam.users?.full_name} has demonstrated aviation English proficiency at ${exam.final_cefr_score||'an insufficient'} level. This candidate does NOT meet the minimum language requirement of ${exam.exam_templates?.passing_cefr} and further training is recommended before reassessment.`
+    const lines = doc.splitTextToSize(rec, 170)
+    doc.text(lines, 20, 168)
+
+    doc.setFontSize(8); doc.setTextColor(150,150,150)
+    doc.text('This report is generated by Avilingo Aviation English Assessment Platform · avilingo.co', 105, 285, { align:'center' })
+    doc.text(`Certificate issued under ICAO Doc 9835 standards · ${org?.name} · Confidential`, 105, 290, { align:'center' })
+
+    doc.save(`RoleFit-Report-${(exam.users?.full_name||'Candidate').replace(/\s+/g,'-')}.pdf`)
+  }
+
+  async function handleSignOut() { await supabase.auth.signOut(); router.push('/login') }
+
+  if (loading) return (
+    <div style={{minHeight:'100vh',background:'#0C1F3F',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{color:'#fff',fontFamily:'var(--fb)'}}>Loading HR Portal...</div>
+    </div>
+  )
+
+  const filtered = candidates.filter(c => !search || c.full_name?.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase()))
+  const totalCredits = credits.reduce((s,c) => s+(c.amount||0), 0)
+  const usedCredits = credits.reduce((s,c) => s+(c.used||0), 0)
+  const certifiedCount = exams.filter(e => e.status==='certified').length
+  const passRate = exams.filter(e=>e.final_cefr_score).length > 0
+    ? Math.round((exams.filter(e => {
+        const order = ['A1','A2','B1','B2','C1','C2']
+        return order.indexOf(e.final_cefr_score) >= order.indexOf(e.exam_templates?.passing_cefr)
+      }).length / exams.filter(e=>e.final_cefr_score).length) * 100)
+    : 0
+
+  const inp = (extra={}) => ({padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)',...extra} as any)
+
+  return (
+    <div style={{minHeight:'100vh',background:'#0C1F3F',fontFamily:'var(--fb)'}}>
+      {/* Header */}
+      <div style={{background:'rgba(255,255,255,0.04)',borderBottom:'1px solid rgba(255,255,255,0.08)',padding:'14px 28px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div>
+          <div style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:900,color:'#fff',marginBottom:'1px'}}>Avil<span style={{color:'#5AAEDF'}}>ingo</span> <span style={{fontWeight:400,fontSize:'14px',color:'rgba(255,255,255,0.4)'}}>HR Portal</span></div>
+          <div style={{fontSize:'12px',color:'rgba(255,255,255,0.35)'}}>{org?.name}</div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+          <div style={{textAlign:'right'}}>
+            <div style={{fontSize:'11px',color:'rgba(255,255,255,0.3)'}}>Credit Balance</div>
+            <div style={{fontSize:'18px',fontWeight:700,color:org?.credit_balance>5?'#1AD18A':'#EF4444',fontFamily:'var(--fm)'}}>{org?.credit_balance||0}</div>
+          </div>
+          <button onClick={()=>setShowPurchaseCredits(true)} style={{padding:'8px 16px',borderRadius:'8px',border:'none',background:'#3A8ED0',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>+ Buy Credits</button>
+          <button onClick={handleSignOut} style={{padding:'7px 14px',borderRadius:'7px',border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.4)',fontSize:'12px',cursor:'pointer',fontFamily:'var(--fb)'}}>Sign out</button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{padding:'20px 28px 0'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'12px',marginBottom:'20px'}}>
+          {[
+            {label:'Total Candidates',value:candidates.length,color:'#5AAEDF'},
+            {label:'Exams Assigned',value:exams.length,color:'#DEAC50'},
+            {label:'Certified',value:certifiedCount,color:'#1AD18A'},
+            {label:'Pass Rate',value:`${passRate}%`,color:passRate>=70?'#1AD18A':'#EF4444'},
+          ].map(s=>(
+            <div key={s.label} style={{background:'rgba(255,255,255,0.06)',borderRadius:'12px',padding:'16px',border:'1px solid rgba(255,255,255,0.08)'}}>
+              <div style={{fontSize:'11px',color:'rgba(255,255,255,0.35)',marginBottom:'4px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{s.label}</div>
+              <div style={{fontSize:'24px',fontWeight:700,color:s.color,fontFamily:'var(--fm)'}}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:'flex',gap:'2px',background:'rgba(255,255,255,0.05)',padding:'3px',borderRadius:'10px',marginBottom:'20px',width:'fit-content'}}>
+          {(['candidates','results','credits','reports'] as const).map(tab=>(
+            <button key={tab} onClick={()=>setActiveTab(tab)} style={{padding:'8px 18px',borderRadius:'8px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:500,textTransform:'capitalize',background:activeTab===tab?'rgba(255,255,255,0.1)':'transparent',color:activeTab===tab?'#fff':'rgba(255,255,255,0.4)',fontFamily:'var(--fb)'}}>
+              {tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{padding:'0 28px 28px'}}>
+
+        {/* Purchase Credits Modal */}
+        {showPurchaseCredits && (
+          <div style={{background:'rgba(255,255,255,0.07)',borderRadius:'14px',padding:'22px',border:'2px solid #3A8ED0',marginBottom:'18px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px'}}>
+              <h3 style={{fontFamily:'var(--fm)',fontSize:'15px',fontWeight:800,color:'#fff',margin:0}}>Purchase Credits</h3>
+              <button onClick={()=>setShowPurchaseCredits(false)} style={{padding:'4px 10px',borderRadius:'6px',border:'1px solid rgba(255,255,255,0.15)',background:'transparent',cursor:'pointer',fontSize:'12px',color:'rgba(255,255,255,0.5)',fontFamily:'var(--fb)'}}>Cancel</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'10px',marginBottom:'16px'}}>
+              {[10,25,50,100].map(n=>(
+                <button key={n} onClick={()=>setCreditAmount(n)} style={{padding:'14px',borderRadius:'10px',border:'2px solid',borderColor:creditAmount===n?'#3A8ED0':'rgba(255,255,255,0.1)',background:creditAmount===n?'rgba(58,142,208,0.2)':'rgba(255,255,255,0.04)',cursor:'pointer',textAlign:'center',fontFamily:'var(--fb)'}}>
+                  <div style={{fontSize:'22px',fontWeight:700,color:'#fff',fontFamily:'var(--fm)'}}>{n}</div>
+                  <div style={{fontSize:'11px',color:'rgba(255,255,255,0.4)',marginTop:'2px'}}>credits</div>
+                  <div style={{fontSize:'12px',fontWeight:600,color:'#5AAEDF',marginTop:'4px'}}>€{(n*25*1.20).toFixed(0)} inc. VAT</div>
+                </button>
+              ))}
+            </div>
+            <div style={{background:'rgba(255,255,255,0.05)',borderRadius:'8px',padding:'12px 16px',marginBottom:'14px',fontSize:'13px',color:'rgba(255,255,255,0.6)'}}>
+              <strong style={{color:'#fff'}}>{creditAmount} credits</strong> × €25 = €{(creditAmount*25).toFixed(2)} + 20% KDV = <strong style={{color:'#1AD18A'}}>€{(creditAmount*25*1.20).toFixed(2)}</strong>
+              <div style={{fontSize:'11.5px',color:'rgba(255,255,255,0.35)',marginTop:'4px'}}>1 credit = 1 candidate exam. Invoice will be generated automatically.</div>
+            </div>
+            <button onClick={purchaseCredits} disabled={saving} style={{padding:'11px 28px',borderRadius:'9px',border:'none',background:'#3A8ED0',color:'#fff',fontSize:'14px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>
+              {saving?'Processing...':'Confirm Purchase — €'+(creditAmount*25*1.20).toFixed(2)}
+            </button>
+          </div>
+        )}
+
+        {/* CANDIDATES TAB */}
+        {activeTab==='candidates' && (
+          <div>
+            <div style={{display:'flex',gap:'10px',marginBottom:'14px',alignItems:'center'}}>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search candidates..." style={{padding:'9px 14px',borderRadius:'8px',border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.06)',color:'#fff',fontSize:'13px',fontFamily:'var(--fb)',width:'260px'}} />
+              <span style={{fontSize:'12px',color:'rgba(255,255,255,0.3)'}}>{filtered.length} candidates</span>
+              <div style={{flex:1}}/>
+              <button onClick={()=>setShowAddCandidate(!showAddCandidate)} style={{padding:'9px 18px',borderRadius:'8px',border:'none',background:'#3A8ED0',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>+ Add Candidate</button>
+            </div>
+
+            {showAddCandidate && (
+              <div style={{background:'rgba(255,255,255,0.06)',borderRadius:'12px',padding:'18px',border:'1px solid rgba(255,255,255,0.1)',marginBottom:'14px'}}>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'12px'}}>
+                  <div>
+                    <label style={{fontSize:'11.5px',fontWeight:600,color:'rgba(255,255,255,0.4)',display:'block',marginBottom:'5px'}}>Full Name *</label>
+                    <input value={newCandidate.full_name} onChange={e=>setNewCandidate({...newCandidate,full_name:e.target.value})} placeholder="John Smith" style={{padding:'9px 12px',borderRadius:'7px',border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.08)',color:'#fff',fontSize:'13px',fontFamily:'var(--fb)',width:'100%'}} />
+                  </div>
+                  <div>
+                    <label style={{fontSize:'11.5px',fontWeight:600,color:'rgba(255,255,255,0.4)',display:'block',marginBottom:'5px'}}>Email *</label>
+                    <input type="email" value={newCandidate.email} onChange={e=>setNewCandidate({...newCandidate,email:e.target.value})} placeholder="pilot@airline.com" style={{padding:'9px 12px',borderRadius:'7px',border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.08)',color:'#fff',fontSize:'13px',fontFamily:'var(--fb)',width:'100%'}} />
+                  </div>
+                  <div>
+                    <label style={{fontSize:'11.5px',fontWeight:600,color:'rgba(255,255,255,0.4)',display:'block',marginBottom:'5px'}}>Assign Exam (uses 1 credit)</label>
+                    <select value={newCandidate.template_id} onChange={e=>setNewCandidate({...newCandidate,template_id:e.target.value})} style={{padding:'9px 12px',borderRadius:'7px',border:'1px solid rgba(255,255,255,0.1)',background:'rgba(255,255,255,0.08)',color:'#fff',fontSize:'13px',fontFamily:'var(--fb)',width:'100%'}}>
+                      <option value="">— No exam yet —</option>
+                      {templates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <button onClick={addCandidate} disabled={saving||!newCandidate.email||!newCandidate.full_name} style={{padding:'8px 20px',borderRadius:'7px',border:'none',background:'#3A8ED0',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>
+                  {saving?'Adding...':'Add Candidate'}
+                </button>
+              </div>
+            )}
+
+            {filtered.length === 0 ? (
+              <div style={{background:'rgba(255,255,255,0.04)',borderRadius:'12px',padding:'40px',textAlign:'center',border:'1px solid rgba(255,255,255,0.06)'}}>
+                <div style={{fontSize:'28px',marginBottom:'10px'}}>👥</div>
+                <div style={{fontSize:'14px',color:'rgba(255,255,255,0.4)'}}>No candidates yet. Add your first candidate above.</div>
+              </div>
+            ) : (
+              <div style={{background:'rgba(255,255,255,0.04)',borderRadius:'12px',border:'1px solid rgba(255,255,255,0.06)',overflow:'hidden'}}>
+                <table style={{width:'100%',borderCollapse:'collapse'}}>
+                  <thead>
+                    <tr style={{borderBottom:'1px solid rgba(255,255,255,0.06)',background:'rgba(255,255,255,0.03)'}}>
+                      {['Candidate','Exams','Latest Result','Actions'].map(h=>(
+                        <th key={h} style={{padding:'10px 16px',textAlign:'left',fontSize:'11px',fontWeight:700,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((c,i)=>{
+                      const candidateExams = exams.filter(e=>e.candidate_id===c.id)
+                      const latest = candidateExams[0]
+                      return (
+                        <tr key={c.id} style={{borderBottom:'1px solid rgba(255,255,255,0.04)',background:i%2===0?'transparent':'rgba(255,255,255,0.02)'}}>
+                          <td style={{padding:'12px 16px'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                              <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'rgba(58,142,208,0.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px',fontWeight:700,color:'#5AAEDF',flexShrink:0}}>
+                                {(c.full_name||c.email||'?').charAt(0).toUpperCase()}
+                              </div>
+                              <div>
+                                <div style={{fontSize:'13.5px',fontWeight:600,color:'#fff'}}>{c.full_name||'—'}</div>
+                                <div style={{fontSize:'11.5px',color:'rgba(255,255,255,0.35)'}}>{c.email}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{padding:'12px 16px',fontSize:'13px',color:'rgba(255,255,255,0.5)'}}>{candidateExams.length}</td>
+                          <td style={{padding:'12px 16px'}}>
+                            {latest ? (
+                              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                                {latest.final_cefr_score && <span style={{fontSize:'16px',fontWeight:800,color:cefrColors[latest.final_cefr_score]||'#fff',fontFamily:'var(--fm)'}}>{latest.final_cefr_score}</span>}
+                                <span style={{fontSize:'11px',fontWeight:600,padding:'2px 8px',borderRadius:'100px',background:statusColor[latest.status]||'#F1EFE8',color:'#333'}}>{statusText[latest.status]||latest.status}</span>
+                              </div>
+                            ) : <span style={{fontSize:'12px',color:'rgba(255,255,255,0.25)'}}>No exams</span>}
+                          </td>
+                          <td style={{padding:'12px 16px'}}>
+                            <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                              {assigningExam===c.id ? (
+                                <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                                  <select value={selectedTemplate} onChange={e=>setSelectedTemplate(e.target.value)} style={{padding:'5px 8px',borderRadius:'6px',border:'1px solid rgba(255,255,255,0.15)',background:'rgba(255,255,255,0.1)',color:'#fff',fontSize:'12px',fontFamily:'var(--fb)'}}>
+                                    <option value="">Choose template...</option>
+                                    {templates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+                                  </select>
+                                  <button onClick={()=>assignExamToCandidate(c.id)} disabled={!selectedTemplate||saving} style={{padding:'5px 10px',borderRadius:'6px',border:'none',background:'#3A8ED0',color:'#fff',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>Assign</button>
+                                  <button onClick={()=>setAssigningExam(null)} style={{padding:'5px 10px',borderRadius:'6px',border:'1px solid rgba(255,255,255,0.15)',background:'transparent',color:'rgba(255,255,255,0.4)',fontSize:'12px',cursor:'pointer',fontFamily:'var(--fb)'}}>Cancel</button>
+                                </div>
+                              ) : (
+                                <button onClick={()=>{setAssigningExam(c.id);setSelectedTemplate('')}} style={{padding:'5px 12px',borderRadius:'6px',border:'1px solid rgba(255,255,255,0.15)',background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.7)',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>Assign Exam</button>
+                              )}
+                              {latest?.status==='certified' && (
+                                <button onClick={()=>downloadRoleFitReport(latest.id)} style={{padding:'5px 12px',borderRadius:'6px',border:'1px solid rgba(26,209,138,0.3)',background:'rgba(26,209,138,0.1)',color:'#1AD18A',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Report</button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* RESULTS TAB */}
+        {activeTab==='results' && (
+          <div style={{background:'rgba(255,255,255,0.04)',borderRadius:'12px',border:'1px solid rgba(255,255,255,0.06)',overflow:'hidden'}}>
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead>
+                <tr style={{borderBottom:'1px solid rgba(255,255,255,0.06)',background:'rgba(255,255,255,0.03)'}}>
+                  {['Candidate','Assessment','Score','Status','Date','Actions'].map(h=>(
+                    <th key={h} style={{padding:'10px 16px',textAlign:'left',fontSize:'11px',fontWeight:700,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {exams.map((e,i)=>(
+                  <tr key={e.id} style={{borderBottom:'1px solid rgba(255,255,255,0.04)',background:i%2===0?'transparent':'rgba(255,255,255,0.02)'}}>
+                    <td style={{padding:'11px 16px',fontSize:'13px',color:'#fff'}}>{e.users?.full_name||e.users?.email||'—'}</td>
+                    <td style={{padding:'11px 16px',fontSize:'12.5px',color:'rgba(255,255,255,0.5)'}}>{e.exam_templates?.name}</td>
+                    <td style={{padding:'11px 16px'}}>
+                      {e.final_cefr_score
+                        ? <span style={{fontSize:'16px',fontWeight:800,color:cefrColors[e.final_cefr_score]||'#fff',fontFamily:'var(--fm)'}}>{e.final_cefr_score}</span>
+                        : <span style={{fontSize:'12px',color:'rgba(255,255,255,0.25)'}}>—</span>}
+                    </td>
+                    <td style={{padding:'11px 16px'}}>
+                      <span style={{fontSize:'11px',fontWeight:600,padding:'2px 8px',borderRadius:'100px',background:statusColor[e.status]||'#F1EFE8',color:'#333'}}>{statusText[e.status]||e.status}</span>
+                    </td>
+                    <td style={{padding:'11px 16px',fontSize:'12px',color:'rgba(255,255,255,0.4)'}}>{new Date(e.created_at).toLocaleDateString('en-GB')}</td>
+                    <td style={{padding:'11px 16px'}}>
+                      <div style={{display:'flex',gap:'6px'}}>
+                        {e.status==='certified'&&<button onClick={()=>downloadRoleFitReport(e.id)} style={{padding:'4px 10px',borderRadius:'6px',border:'1px solid rgba(26,209,138,0.3)',background:'rgba(26,209,138,0.1)',color:'#1AD18A',fontSize:'11.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Report</button>}
+                        {e.status==='certified'&&<a href={`/exam/${e.id}/certificate`} style={{padding:'4px 10px',borderRadius:'6px',border:'1px solid rgba(58,142,208,0.3)',background:'rgba(58,142,208,0.1)',color:'#5AAEDF',fontSize:'11.5px',fontWeight:600,textDecoration:'none'}}>Certificate</a>}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {exams.length===0&&<tr><td colSpan={6} style={{padding:'40px',textAlign:'center',color:'rgba(255,255,255,0.3)',fontSize:'13.5px'}}>No exams yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* CREDITS TAB */}
+        {activeTab==='credits' && (
+          <div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'14px',marginBottom:'20px'}}>
+              {[
+                {label:'Current Balance',value:org?.credit_balance||0,color:'#1AD18A'},
+                {label:'Total Purchased',value:totalCredits,color:'#5AAEDF'},
+                {label:'Total Used',value:usedCredits,color:'#DEAC50'},
+              ].map(s=>(
+                <div key={s.label} style={{background:'rgba(255,255,255,0.06)',borderRadius:'12px',padding:'18px',border:'1px solid rgba(255,255,255,0.08)'}}>
+                  <div style={{fontSize:'11px',color:'rgba(255,255,255,0.35)',marginBottom:'5px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{s.label}</div>
+                  <div style={{fontSize:'28px',fontWeight:700,color:s.color,fontFamily:'var(--fm)'}}>{s.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{background:'rgba(255,255,255,0.04)',borderRadius:'12px',border:'1px solid rgba(255,255,255,0.06)',overflow:'hidden'}}>
+              <div style={{padding:'14px 18px',borderBottom:'1px solid rgba(255,255,255,0.06)',fontSize:'12px',fontWeight:700,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'0.5px'}}>Credit History</div>
+              {credits.length===0 ? (
+                <div style={{padding:'32px',textAlign:'center',color:'rgba(255,255,255,0.3)',fontSize:'13.5px'}}>No credit purchases yet.</div>
+              ) : credits.map((c,i)=>(
+                <div key={c.id} style={{padding:'12px 18px',borderBottom:'1px solid rgba(255,255,255,0.04)',display:'flex',alignItems:'center',justifyContent:'space-between',background:i%2===0?'transparent':'rgba(255,255,255,0.02)'}}>
+                  <div>
+                    <div style={{fontSize:'13.5px',fontWeight:600,color:'#fff'}}>{c.amount} credits purchased</div>
+                    <div style={{fontSize:'11.5px',color:'rgba(255,255,255,0.35)'}}>Expires: {c.expires_at?new Date(c.expires_at).toLocaleDateString('en-GB'):'—'}</div>
+                  </div>
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:'13px',fontWeight:700,color:'#1AD18A'}}>€{(c.amount*25*1.20).toFixed(2)}</div>
+                    <div style={{fontSize:'11px',color:'rgba(255,255,255,0.3)'}}>Used: {c.used||0}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* REPORTS TAB */}
+        {activeTab==='reports' && (
+          <div>
+            <div style={{background:'rgba(255,255,255,0.04)',borderRadius:'12px',padding:'22px',border:'1px solid rgba(255,255,255,0.06)',marginBottom:'14px'}}>
+              <h3 style={{fontFamily:'var(--fm)',fontSize:'15px',fontWeight:800,color:'#fff',marginBottom:'6px'}}>Role-Fit Reports</h3>
+              <p style={{fontSize:'13px',color:'rgba(255,255,255,0.4)',marginBottom:'16px'}}>Download detailed assessment reports for certified candidates. Each report includes CEFR score, pass/fail recommendation, and section breakdown.</p>
+              <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                {exams.filter(e=>e.status==='certified').map(e=>(
+                  <div key={e.id} style={{background:'rgba(255,255,255,0.04)',borderRadius:'10px',padding:'14px 16px',border:'1px solid rgba(255,255,255,0.07)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    <div>
+                      <div style={{fontSize:'13.5px',fontWeight:600,color:'#fff',marginBottom:'2px'}}>{e.users?.full_name||e.users?.email}</div>
+                      <div style={{fontSize:'12px',color:'rgba(255,255,255,0.4)'}}>{e.exam_templates?.name} · {new Date(e.completed_at||e.created_at).toLocaleDateString('en-GB')}</div>
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                      <span style={{fontSize:'20px',fontWeight:800,color:cefrColors[e.final_cefr_score]||'#fff',fontFamily:'var(--fm)'}}>{e.final_cefr_score}</span>
+                      <button onClick={()=>downloadRoleFitReport(e.id)} style={{padding:'8px 16px',borderRadius:'8px',border:'none',background:'#3A8ED0',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Download PDF</button>
+                    </div>
+                  </div>
+                ))}
+                {exams.filter(e=>e.status==='certified').length===0&&(
+                  <div style={{padding:'32px',textAlign:'center',color:'rgba(255,255,255,0.3)',fontSize:'13.5px'}}>No certified exams yet. Reports will appear here once candidates complete their assessments.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
