@@ -92,7 +92,20 @@ export default function UserManagement() {
   async function deleteUser(userId: string, email: string) {
     if (!confirm(`Delete user ${email}? This cannot be undone.`)) return
     setSaving(true)
-    await supabase.from('users').delete().eq('id', userId)
+    // Delete dependent records first
+    const { data: userExams } = await supabase.from('exams').select('id').eq('candidate_id', userId)
+    if (userExams?.length) {
+      const examIds = userExams.map(e => e.id)
+      await supabase.from('exam_answers').delete().in('exam_id', examIds)
+      await supabase.from('exam_question_sets').delete().in('exam_id', examIds)
+      await supabase.from('grades').delete().in('exam_id', examIds)
+      await supabase.from('violations').delete().in('exam_id', examIds)
+      await supabase.from('proctoring_events').delete().in('exam_id', examIds)
+      await supabase.from('certificates').delete().in('exam_id', examIds)
+      await supabase.from('exams').delete().eq('candidate_id', userId)
+    }
+    const { error } = await supabase.from('users').delete().eq('id', userId)
+    if (error) alert('Error deleting user: ' + error.message)
     setSaving(false)
     loadUsers()
   }
