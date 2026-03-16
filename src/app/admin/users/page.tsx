@@ -268,10 +268,18 @@ export default function UserManagement() {
                 </select>
               </div>
             </div>
-            <div style={{display:'flex',gap:'10px'}}>
-              <button onClick={()=>updateUser(editUser.id,{full_name:editUser.full_name,role:editUser.role,org_id:editUser.org_id})} disabled={saving} style={{padding:'9px 24px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>
-                {saving?'Saving...':'Update User'}
-              </button>
+            <div style={{display:'flex',gap:'10px',justifyContent:'space-between',alignItems:'center'}}>
+              <div style={{display:'flex',gap:'10px'}}>
+                <button onClick={()=>updateUser(editUser.id,{full_name:editUser.full_name,role:editUser.role,org_id:editUser.org_id})} disabled={saving} style={{padding:'9px 24px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>
+                  {saving?'Saving...':'Update User'}
+                </button>
+                <button onClick={()=>setEditUser(null)} style={{padding:'9px 18px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',color:'var(--t2)',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>Cancel</button>
+              </div>
+              {editUser.role !== 'super_admin' && (
+                <button onClick={()=>{setEditUser(null);deleteUser(editUser.id,editUser.email)}} style={{padding:'9px 18px',borderRadius:'8px',border:'1.5px solid #FECACA',background:'#FEF2F2',color:'#DC2626',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>Delete User</button>
+              )}
+            </div>
+            <div style={{display:'none'}}>
               {editUser.role === 'candidate' && (
                 <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
                   <select id="templateSelect" style={{...inp({width:'220px'})}} defaultValue="">
