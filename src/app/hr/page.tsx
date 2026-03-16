@@ -67,7 +67,10 @@ export default function HRPortal() {
   async function addCandidate() {
     if (!newCandidate.email || !newCandidate.full_name) return
     setSaving(true)
+    // Generate a UUID for the new user
+    const newId = crypto.randomUUID()
     const { error } = await supabase.from('users').insert({
+      id: newId,
       email: newCandidate.email,
       full_name: newCandidate.full_name,
       role: 'candidate',
@@ -75,19 +78,15 @@ export default function HRPortal() {
     })
     if (error) { alert('Error: ' + error.message); setSaving(false); return }
     if (newCandidate.template_id) {
-      const { data: newUser } = await supabase.from('users').select('id').eq('email', newCandidate.email).single()
-      if (newUser) {
-        await supabase.from('exams').insert({
-          candidate_id: newUser.id,
-          template_id: newCandidate.template_id,
-          org_id: org.id,
-          status: 'pending'
-        })
-        // Deduct credit
-        if (org.credit_balance > 0) {
-          await supabase.from('organizations').update({ credit_balance: org.credit_balance - 1 }).eq('id', org.id)
-          setOrg((o: any) => ({ ...o, credit_balance: o.credit_balance - 1 }))
-        }
+      await supabase.from('exams').insert({
+        candidate_id: newId,
+        template_id: newCandidate.template_id,
+        org_id: org.id,
+        status: 'pending'
+      })
+      if ((org.credit_balance||0) > 0) {
+        await supabase.from('organizations').update({ credit_balance: org.credit_balance - 1 }).eq('id', org.id)
+        setOrg((o: any) => ({ ...o, credit_balance: o.credit_balance - 1 }))
       }
     }
     setSaving(false)
