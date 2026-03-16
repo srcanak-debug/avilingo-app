@@ -456,7 +456,7 @@ export default function AdminDashboard() {
                   <option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option>
                 </select>
                 <div style={{flex:1}}/>
-                <a href="/admin/import" style={{padding:'9px 14px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',textDecoration:'none'}}>📊 CSV Import</a>
+                <button onClick={exportQuestions} style={{padding:'9px 14px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Export CSV</button><a href="/admin/import" style={{padding:'9px 14px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',textDecoration:'none'}}>📊 CSV Import</a>
                 <button onClick={()=>{setShowAI(!showAI);setShowForm(false)}} style={{padding:'9px 14px',borderRadius:'8px',border:'1.5px solid #7C3AED',background:'#F5F3FF',color:'#5B21B6',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>🤖 AI Import</button>
                 <button onClick={()=>{resetForm();setShowForm(true);setShowAI(false)}} style={{padding:'9px 16px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>+ Add Question</button>
               </div>
