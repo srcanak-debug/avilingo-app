@@ -1062,7 +1062,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {activeSection !== 'dashboard' && activeSection !== 'questions' && activeSection !== 'templates' && (
+          {activeSection !== 'dashboard' && activeSection !== 'questions' && activeSection !== 'templates' && activeSection !== 'users' && activeSection !== 'reports' && (
             <div style={{background:'#fff',borderRadius:'14px',padding:'40px',border:'1px solid var(--bdr)',textAlign:'center'}}>
               <div style={{fontSize:'36px',marginBottom:'14px'}}>🚧</div>
               <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'6px',textTransform:'capitalize'}}>{activeSection} Panel</h3>
