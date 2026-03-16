@@ -1062,6 +1062,22 @@ export default function AdminDashboard() {
             </div>
           )}
 
+          {activeSection === 'users' && (
+            <div style={{textAlign:'center',padding:'40px'}}>
+              <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>User Management</h3>
+              <p style={{fontSize:'14px',color:'var(--t3)',marginBottom:'20px'}}>Manage users, roles, organizations and exam assignments.</p>
+              <a href="/admin/users" style={{padding:'12px 28px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'14px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Open User Management →</a>
+            </div>
+          )}
+
+          {activeSection === 'reports' && (
+            <div style={{textAlign:'center',padding:'40px'}}>
+              <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Reports & Analytics</h3>
+              <p style={{fontSize:'14px',color:'var(--t3)',marginBottom:'20px'}}>View platform-wide analytics, exam results and export data.</p>
+              <a href="/admin/reports" style={{padding:'12px 28px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'14px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Open Reports Dashboard →</a>
+            </div>
+          )}
+
           {activeSection !== 'dashboard' && activeSection !== 'questions' && activeSection !== 'templates' && activeSection !== 'users' && activeSection !== 'reports' && (
             <div style={{background:'#fff',borderRadius:'14px',padding:'40px',border:'1px solid var(--bdr)',textAlign:'center'}}>
               <div style={{fontSize:'36px',marginBottom:'14px'}}>🚧</div>
