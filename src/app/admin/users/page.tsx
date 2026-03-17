@@ -340,9 +340,7 @@ export default function UserManagement() {
                         {u.role==='candidate'&&(
                           <a href={`/admin/users/${u.id}/assign-exam`} style={{padding:'4px 10px',borderRadius:'6px',border:'1.5px solid #BBF7D0',background:'#F0FDF4',fontSize:'11.5px',fontWeight:600,color:'#14532D',textDecoration:'none',display:'inline-block'}}>Assign Exam</a>
                         )}
-                        {u.role!=='super_admin'&&(
-                          <button onClick={()=>deleteUser(u.id,u.email)} style={{padding:'4px 10px',borderRadius:'6px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'11.5px',fontWeight:600,color:'#DC2626',fontFamily:'var(--fb)'}}>Delete</button>
-                        )}
+
                       </div>
                     </td>
                   </tr>
