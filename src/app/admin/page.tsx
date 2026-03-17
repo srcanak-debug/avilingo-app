@@ -1078,7 +1078,15 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {activeSection !== 'dashboard' && activeSection !== 'questions' && activeSection !== 'templates' && activeSection !== 'users' && activeSection !== 'reports' && (
+          {activeSection === 'organizations' && (
+            <div style={{textAlign:'center',padding:'40px'}}>
+              <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Organizations</h3>
+              <p style={{fontSize:'14px',color:'var(--t3)',marginBottom:'20px'}}>Manage airline clients, credits and subscriptions.</p>
+              <a href="/admin/users" style={{padding:'12px 28px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'14px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Manage in User Management →</a>
+            </div>
+          )}
+
+          {activeSection !== 'dashboard' && activeSection !== 'questions' && activeSection !== 'templates' && activeSection !== 'users' && activeSection !== 'reports' && activeSection !== 'organizations' && (
             <div style={{background:'#fff',borderRadius:'14px',padding:'40px',border:'1px solid var(--bdr)',textAlign:'center'}}>
               <div style={{fontSize:'36px',marginBottom:'14px'}}>🚧</div>
               <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'6px',textTransform:'capitalize'}}>{activeSection} Panel</h3>
