@@ -36,6 +36,14 @@ const ROLE_PROFILES: Record<string,string[]> = {
   'ground_staff': ['grammar','reading','listening','writing','speaking'],
 }
 
+const DEFAULT_PREP = {
+  grammar:   { seconds: 45, bullets: ['The grammar section includes multiple-choice questions.','Read each question carefully and select the best answer.','There are no penalties for wrong answers.','Your movements, screen activity, and eye activity are monitored.'] },
+  reading:   { seconds: 45, bullets: ['The reading section includes texts followed by multiple-choice questions.','Each question has only one correct answer. Read the texts carefully.','There are no penalties for incorrect answers.','Your movements, screen activity, and eye activity are being monitored.'] },
+  writing:   { seconds: 45, bullets: ['Write at least 40 words for each question. Do not copy or paste from any source.','If time runs out, the system will automatically save your response.','Your movements, eye activity, and screen are being monitored.'] },
+  speaking:  { seconds: 45, bullets: ['You must speak for at least 30 seconds to meet the minimum requirement.','Do not use written texts, memorized speeches, ChatGPT, or any other AI tools.','When you are ready, press the record button to start.'] },
+  listening: { seconds: 45, bullets: ['Each audio will be played once only.','There are no penalties for wrong answers, so try to answer every question.','When you are ready, press the Play button to begin listening.'] },
+}
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [stats, setStats] = useState({ users:0, exams:0, questions:0, orgs:0 })
@@ -439,21 +447,13 @@ export default function AdminDashboard() {
     if (editTemplate) { const {error}=await supabase.from('exam_templates').update(payload).eq('id',editTemplate.id); if(error){alert('Error: '+error.message);setSavingTemplate(false);return} }
     else { const {error}=await supabase.from('exam_templates').insert(payload); if(error){alert('Error: '+error.message);setSavingTemplate(false);return} }
     setSavingTemplate(false); setShowTemplateForm(false); setEditTemplate(null)
-    
-  setNewTemplate({name:'',role_profile:'general',grammar_count:15,reading_count:5,writing_count:3,speaking_count:4,listening_count:8,weight_grammar:10,weight_reading:20,weight_writing:20,weight_speaking:40,weight_listening:10,time_limit_mins:90,writing_timer_mins:3.5,speaking_attempts:3,listening_single_play:true,passing_cefr:'B2',proctoring_enabled:true,attempts_allowed:1,org_id:null,prep_grammar:DEFAULT_PREP.grammar,prep_reading:DEFAULT_PREP.reading,prep_writing:DEFAULT_PREP.writing,prep_speaking:DEFAULT_PREP.speaking,prep_listening:DEFAULT_PREP.listening} as any)
+    setNewTemplate({name:'',role_profile:'general',grammar_count:15,reading_count:5,writing_count:3,speaking_count:4,listening_count:8,weight_grammar:10,weight_reading:20,weight_writing:20,weight_speaking:40,weight_listening:10,time_limit_mins:90,writing_timer_mins:3.5,speaking_attempts:3,listening_single_play:true,passing_cefr:'B2',proctoring_enabled:true,attempts_allowed:1,org_id:null,prep_grammar:DEFAULT_PREP.grammar,prep_reading:DEFAULT_PREP.reading,prep_writing:DEFAULT_PREP.writing,prep_speaking:DEFAULT_PREP.speaking,prep_listening:DEFAULT_PREP.listening} as any)
     loadTemplates()
   }
 
   async function deleteTemplate(id: string) { if(!confirm('Delete?'))return; await supabase.from('exam_templates').delete().eq('id',id); loadTemplates() }
   async function duplicateTemplate(t: any) { const {name,...rest}=t; await supabase.from('exam_templates').insert({...rest,name:name+' (Copy)'}); loadTemplates() }
 
-  const DEFAULT_PREP = {
-    grammar:   { seconds: 45, bullets: ['The grammar section includes multiple-choice questions.','Read each question carefully and select the best answer.','There are no penalties for wrong answers.','Your movements, screen activity, and eye activity are monitored.'] },
-    reading:   { seconds: 45, bullets: ['The reading section includes texts followed by multiple-choice questions.','Each question has only one correct answer. Read the texts carefully.','There are no penalties for incorrect answers.','Your movements, screen activity, and eye activity are being monitored.'] },
-    writing:   { seconds: 45, bullets: ['Write at least 40 words for each question. Do not copy or paste from any source.','If time runs out, the system will automatically save your response.','Your movements, eye activity, and screen are being monitored.'] },
-    speaking:  { seconds: 45, bullets: ['You must speak for at least 30 seconds to meet the minimum requirement.','Do not use written texts, memorized speeches, ChatGPT, or any other AI tools.','When you are ready, press the record button to start.'] },
-    listening: { seconds: 45, bullets: ['Each audio will be played once only.','There are no penalties for wrong answers, so try to answer every question.','When you are ready, press the Play button to begin listening.'] },
-  }
   function startEditTemplate(t: any) { setEditTemplate(t); setNewTemplate({name:t.name,role_profile:t.role_profile,grammar_count:t.grammar_count,reading_count:t.reading_count,writing_count:t.writing_count,speaking_count:t.speaking_count,listening_count:t.listening_count,weight_grammar:t.weight_grammar,weight_reading:t.weight_reading,weight_writing:t.weight_writing,weight_speaking:t.weight_speaking,weight_listening:t.weight_listening,time_limit_mins:t.time_limit_mins,writing_timer_mins:t.writing_timer_mins||3.5,speaking_attempts:t.speaking_attempts||3,listening_single_play:t.listening_single_play!==false,passing_cefr:t.passing_cefr,proctoring_enabled:t.proctoring_enabled!==false,attempts_allowed:t.attempts_allowed||1,org_id:t.org_id||null,prep_grammar:t.prep_grammar||DEFAULT_PREP.grammar,prep_reading:t.prep_reading||DEFAULT_PREP.reading,prep_writing:t.prep_writing||DEFAULT_PREP.writing,prep_speaking:t.prep_speaking||DEFAULT_PREP.speaking,prep_listening:t.prep_listening||DEFAULT_PREP.listening} as any); setShowTemplateForm(true) }
 
   async function handleSignOut() { await supabase.auth.signOut(); router.push('/login') }
@@ -995,6 +995,35 @@ export default function AdminDashboard() {
                         Enable WebRTC proctoring
                       </label>
                     </div>
+                  </div>
+                  <div style={{background:'var(--off)',borderRadius:'10px',padding:'16px',marginBottom:'16px'}}>
+                    <h4 style={{fontFamily:'var(--fm)',fontSize:'13px',fontWeight:800,color:'var(--navy)',marginBottom:'4px'}}>Section Preparation Screens</h4>
+                    <p style={{fontSize:'12px',color:'var(--t3)',marginBottom:'14px'}}>Set countdown duration and bullet instructions candidates see before each section.</p>
+                    {(['grammar','reading','writing','speaking','listening'] as const).map(sec => {
+                      const prepKey = ('prep_' + sec) as any
+                      const prep = (newTemplate as any)[prepKey] || { seconds: 45, bullets: [] }
+                      const secColor = sectionColors[sec]
+                      return (
+                        <div key={sec} style={{background:'#fff',borderRadius:'10px',padding:'14px',marginBottom:'10px',border:'1.5px solid '+secColor+'30'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px'}}>
+                            <div style={{fontSize:'11px',fontWeight:700,padding:'3px 10px',borderRadius:'100px',background:secColor+'15',color:secColor,textTransform:'capitalize'}}>{sec}</div>
+                            <div style={{display:'flex',alignItems:'center',gap:'8px',marginLeft:'auto'}}>
+                              <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)'}}>Prep time (seconds)</label>
+                              <input type="number" min={0} max={120} value={prep.seconds}
+                                onChange={e => setNewTemplate({...newTemplate, [prepKey]: {...prep, seconds: +e.target.value}} as any)}
+                                style={{width:'70px',padding:'5px 8px',borderRadius:'7px',border:'1.5px solid '+secColor,fontSize:'13px',fontWeight:700,textAlign:'center',color:secColor,fontFamily:'var(--fb)'}} />
+                            </div>
+                          </div>
+                          <label style={{fontSize:'11.5px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Instructions (one bullet per line)</label>
+                          <textarea value={prep.bullets.join('\n')}
+                            onChange={e => setNewTemplate({...newTemplate, [prepKey]: {...prep, bullets: e.target.value.split('\n').filter((l: string) => l.trim())}} as any)}
+                            rows={Math.max(3, prep.bullets.length + 1)}
+                            placeholder="Add instructions, one per line..."
+                            style={{width:'100%',padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',fontFamily:'var(--fb)',lineHeight:1.6,resize:'vertical',outline:'none',boxSizing:'border-box'}} />
+                          <div style={{fontSize:'11px',color:'var(--t3)',marginTop:'3px'}}>Each line = one bullet on the candidate prep screen.</div>
+                        </div>
+                      )
+                    })}
                   </div>
                   <button onClick={saveTemplate} disabled={savingTemplate} style={{padding:'9px 22px',borderRadius:'7px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>{savingTemplate?'Saving...':editTemplate?'Update Template':'Save Template'}</button>
                 </div>
