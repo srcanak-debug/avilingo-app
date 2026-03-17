@@ -1105,7 +1105,8 @@ export default function AdminDashboard() {
           {activeSection === 'audit' && (
             <div style={{textAlign:'center',padding:'40px'}}>
               <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Audit Logs</h3>
-              <p style={{fontSize:'14px',color:'var(--t3)',marginBottom:'20px'}}>Enterprise audit logging coming soon.</p>
+              <p style={{fontSize:'14px',color:'var(--t3)',marginBottom:'20px'}}>Immutable record of all admin actions for EASA/FAA compliance.</p>
+              <a href="/admin/audit" style={{padding:'12px 28px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'14px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Open Audit Logs →</a>
             </div>
           )}
 
