@@ -1086,7 +1086,30 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {activeSection !== 'dashboard' && activeSection !== 'questions' && activeSection !== 'templates' && activeSection !== 'users' && activeSection !== 'reports' && activeSection !== 'organizations' && (
+          {activeSection === 'evaluator' && (
+            <div style={{textAlign:'center',padding:'40px'}}>
+              <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Grading Queue</h3>
+              <p style={{fontSize:'14px',color:'var(--t3)',marginBottom:'20px'}}>Review and grade Speaking and Writing submissions.</p>
+              <a href="/evaluator" style={{padding:'12px 28px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'14px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Open Grading Queue →</a>
+            </div>
+          )}
+
+          {activeSection === 'invoices' && (
+            <div style={{textAlign:'center',padding:'40px'}}>
+              <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Invoices</h3>
+              <p style={{fontSize:'14px',color:'var(--t3)',marginBottom:'20px'}}>Billing and invoice management coming soon.</p>
+              <a href="/admin/reports" style={{padding:'12px 28px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'14px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>View Reports →</a>
+            </div>
+          )}
+
+          {activeSection === 'audit' && (
+            <div style={{textAlign:'center',padding:'40px'}}>
+              <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Audit Logs</h3>
+              <p style={{fontSize:'14px',color:'var(--t3)',marginBottom:'20px'}}>Enterprise audit logging coming soon.</p>
+            </div>
+          )}
+
+          {activeSection !== 'dashboard' && activeSection !== 'questions' && activeSection !== 'templates' && activeSection !== 'users' && activeSection !== 'reports' && activeSection !== 'organizations' && activeSection !== 'evaluator' && activeSection !== 'invoices' && activeSection !== 'audit' && (
             <div style={{background:'#fff',borderRadius:'14px',padding:'40px',border:'1px solid var(--bdr)',textAlign:'center'}}>
               <div style={{fontSize:'36px',marginBottom:'14px'}}>🚧</div>
               <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'6px',textTransform:'capitalize'}}>{activeSection} Panel</h3>
