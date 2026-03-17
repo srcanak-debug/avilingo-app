@@ -82,7 +82,7 @@ export default function CandidateDashboard() {
                 )}
 
                 {(exam.status === 'pending' || exam.status === 'in_progress') && (
-                  <button onClick={() => router.push(`/exam/${exam.id}/start`)} style={{padding:'11px 24px',borderRadius:'9px',border:'none',background:'#3A8ED0',color:'#fff',fontSize:'14px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',width:'100%'}}>
+                  <button onClick={() => router.push(`/exam/${exam.id}/preflight`)} style={{padding:'11px 24px',borderRadius:'9px',border:'none',background:'#3A8ED0',color:'#fff',fontSize:'14px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',width:'100%'}}>
                     {exam.status === 'in_progress' ? '▶ Resume Exam' : '▶ Start Exam'}
                   </button>
                 )}

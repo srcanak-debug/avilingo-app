@@ -97,21 +97,22 @@ export default function ExamCompletePage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#F3F4F6',
+      background: isTimeUp
+        ? 'linear-gradient(135deg, #818CF8 0%, #A78BFA 50%, #C4B5FD 100%)'
+        : 'linear-gradient(135deg, #818CF8 0%, #A78BFA 50%, #C4B5FD 100%)',
       fontFamily: "'Inter', sans-serif",
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Header */}
       <div style={{
         padding: '14px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        background: '#0A1628',
       }}>
         <span style={{ fontSize: '15px', fontWeight: 600, color: '#fff' }}>
           {exam?.exam_templates?.name || 'English Proficiency Exam'}
         </span>
         <span style={{
           fontSize: '12px', fontWeight: 700, padding: '4px 14px', borderRadius: '100px',
-          background: isTimeUp ? 'rgba(255,255,255,0.15)' : '#16A34A',
+          background: isTimeUp ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.2)',
           color: '#fff',
         }}>{isTimeUp ? '⏱ Time\'s Up' : '✓ Completed'}</span>
       </div>

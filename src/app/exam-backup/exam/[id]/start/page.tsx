@@ -53,7 +53,11 @@ export default function ExamStartPage() {
   }
 
   async function handleStartExam() {
-    router.push(`/exam/${examId}/preflight`)
+    const template = exam.exam_templates
+    const role = template.role_profile || 'general'
+    const sectionOrder = ROLE_SECTION_ORDER[role] || ROLE_SECTION_ORDER.general
+    const firstSection = sectionOrder.find((s: string) => (template[`${s}_count`] || 0) > 0) || sectionOrder[0]
+    router.push(`/exam/${examId}/section/${firstSection}`)
   }
 
   if (loading) return (
@@ -91,20 +95,26 @@ export default function ExamStartPage() {
       {/* Header */}
       <div style={{ maxWidth: '900px', margin: '0 auto', padding: '32px 24px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '6px' }}>
-          <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#0A1628', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: '20px' }}>📋</span>
-          </div>
-          <div>
-            <h1 style={{
-              fontSize: '22px', fontWeight: 800, color: '#111',
-              fontFamily: "'Montserrat', sans-serif", margin: 0,
-            }}>
-              {template?.name || 'English Proficiency Exam'}
-            </h1>
-            <p style={{ fontSize: '13px', color: '#6B7280', margin: '2px 0 0' }}>{exam?.organizations?.name || 'Aviation English Assessment'}</p>
-          </div>
+          <span style={{ fontSize: '28px' }}>📋</span>
+          <h1 style={{
+            fontSize: '22px', fontWeight: 800, color: '#111',
+            fontFamily: "'Montserrat', sans-serif", margin: 0,
+          }}>
+            {template?.name || 'English Proficiency Exam'}
+          </h1>
         </div>
-        <div style={{ marginBottom: '28px' }} />
+        <div style={{ display: 'flex', gap: '8px', marginLeft: '42px', marginBottom: '28px' }}>
+          <span style={{
+            fontSize: '12px', fontWeight: 700, padding: '3px 12px',
+            borderRadius: '100px', background: '#DBEAFE', color: '#2563EB',
+          }}>{levelRange}</span>
+          <span style={{
+            fontSize: '12px', fontWeight: 700, padding: '3px 12px',
+            borderRadius: '100px',
+            background: isActive ? '#DCFCE7' : '#FEE2E2',
+            color: isActive ? '#16A34A' : '#DC2626',
+          }}>{isActive ? 'Active' : exam.status}</span>
+        </div>
       </div>
 
       {/* Main Grid */}
@@ -177,16 +187,16 @@ export default function ExamStartPage() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Level: </span>
+                  <span style={{ fontSize: '13px', color: '#6B7280' }}>{levelRange}</span>
+                </div>
+                <div>
                   <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Format: </span>
                   <span style={{ fontSize: '13px', color: '#6B7280' }}>Online (Proctored)</span>
                 </div>
                 <div>
                   <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Total Questions: </span>
                   <span style={{ fontSize: '13px', color: '#6B7280' }}>{totalQuestions}</span>
-                </div>
-                <div>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>Sections: </span>
-                  <span style={{ fontSize: '13px', color: '#6B7280' }}>{sectionOrder.length}</span>
                 </div>
                 <div style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>
                   Your camera and microphone will be monitored throughout the exam.
@@ -239,7 +249,7 @@ export default function ExamStartPage() {
               display: 'inline-flex', alignItems: 'center', gap: '10px',
               boxShadow: '0 4px 14px rgba(37,99,235,0.35)',
             }}>
-              ▶ Continue to Pre-flight Checks
+              ▶ Start Exam
             </button>
           </div>
         </div>

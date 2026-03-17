@@ -78,7 +78,7 @@ export default function AdminDashboard() {
   const [formQ, setFormQ] = useState({
     section:'grammar', type:'multiple_choice', content:'',
     correct_answer:'', cefr_level:'B1', difficulty:'medium',
-    competency_tag:'', aircraft_context:'', audio_url:'', active:true
+    competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true
   })
   const [options, setOptions] = useState([
     {text:'',is_correct:false},{text:'',is_correct:false},
@@ -274,14 +274,14 @@ export default function AdminDashboard() {
 
   function startEdit(q: any) {
     setEditQ(q)
-    setFormQ({ section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'', cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'', aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', active:q.active })
+    setFormQ({ section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'', cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'', aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', image_url:q.image_url||'', active:q.active })
     setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}])
     setRubrics([]); setShowForm(true); setDetailQ(null)
   }
 
   function resetForm() {
     setShowForm(false); setEditQ(null)
-    setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', active:true })
+    setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true })
     setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}])
     setRubrics([]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([])
   }
@@ -708,8 +708,49 @@ export default function AdminDashboard() {
                     )}
                     {(formQ.section==='listening'||formQ.type==='audio_response'||formQ.type==='picture_description')&&(
                       <div style={{marginBottom:'10px'}}>
-                        <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>{formQ.type==='picture_description'?'Image URL':'Audio URL'}</label>
-                        <input value={formQ.audio_url} onChange={e=>setFormQ({...formQ,audio_url:e.target.value})} placeholder="https://..." style={inp({width:'100%'})} />
+                        <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>
+                          {formQ.type==='picture_description'?'Image':'Audio'} — Upload or paste URL
+                        </label>
+                        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                          <input value={formQ.audio_url} onChange={e=>setFormQ({...formQ,audio_url:e.target.value})} placeholder="https://... or upload below" style={inp({flex:1})} />
+                          <label style={{padding:'8px 14px',borderRadius:'8px',border:'1.5px solid var(--sky)',background:'#EAF5FC',color:'var(--sky)',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',whiteSpace:'nowrap'}}>
+                            📁 Upload
+                            <input type="file" accept={formQ.type==='picture_description'?'image/*':'audio/*'} style={{display:'none'}} onChange={async (e)=>{
+                              const file = e.target.files?.[0]; if(!file) return;
+                              const ext = file.name.split('.').pop()
+                              const fileName = `${formQ.section}/${Date.now()}.${ext}`
+                              const { data, error } = await supabase.storage.from('question-assets').upload(fileName, file, { upsert: true })
+                              if(error){ alert('Upload failed: '+error.message); return }
+                              const { data: urlData } = supabase.storage.from('question-assets').getPublicUrl(fileName)
+                              if(formQ.type==='picture_description') setFormQ({...formQ, image_url: urlData.publicUrl})
+                              else setFormQ({...formQ, audio_url: urlData.publicUrl})
+                            }} />
+                          </label>
+                        </div>
+                        {formQ.audio_url && formQ.type!=='picture_description' && <audio src={formQ.audio_url} controls style={{width:'100%',marginTop:'6px',height:'32px'}} />}
+                        {formQ.audio_url && formQ.type==='picture_description' && <img src={formQ.audio_url} alt="preview" style={{maxWidth:'200px',borderRadius:'8px',marginTop:'6px'}} />}
+                      </div>
+                    )}
+                    {/* Image upload for any question type */}
+                    {formQ.type!=='picture_description' && (
+                      <div style={{marginBottom:'10px'}}>
+                        <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>Image (optional) — for visual questions</label>
+                        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                          <input value={formQ.image_url} onChange={e=>setFormQ({...formQ,image_url:e.target.value})} placeholder="Image URL or upload" style={inp({flex:1})} />
+                          <label style={{padding:'8px 14px',borderRadius:'8px',border:'1.5px solid #7C3AED',background:'#F5F3FF',color:'#7C3AED',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',whiteSpace:'nowrap'}}>
+                            🖼️ Upload
+                            <input type="file" accept="image/*" style={{display:'none'}} onChange={async (e)=>{
+                              const file = e.target.files?.[0]; if(!file) return;
+                              const ext = file.name.split('.').pop()
+                              const fileName = `images/${Date.now()}.${ext}`
+                              const { data, error } = await supabase.storage.from('question-assets').upload(fileName, file, { upsert: true })
+                              if(error){ alert('Upload failed: '+error.message); return }
+                              const { data: urlData } = supabase.storage.from('question-assets').getPublicUrl(fileName)
+                              setFormQ({...formQ, image_url: urlData.publicUrl})
+                            }} />
+                          </label>
+                        </div>
+                        {formQ.image_url && <img src={formQ.image_url} alt="preview" style={{maxWidth:'200px',borderRadius:'8px',marginTop:'6px'}} />}
                       </div>
                     )}
                     {!editQ&&(

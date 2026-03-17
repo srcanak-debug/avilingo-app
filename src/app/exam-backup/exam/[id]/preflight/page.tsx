@@ -21,7 +21,6 @@ export default function PreflightPage() {
   const [kvkkOpen, setKvkkOpen] = useState(false)
   const [kvkkScrolled, setKvkkScrolled] = useState(false)
   const [kvkkAccepted, setKvkkAccepted] = useState(false)
-  const [kvkkLang, setKvkkLang] = useState<'tr'|'en'>('tr')
   const [fullscreenActive, setFullscreenActive] = useState(false)
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
   const [pingMs, setPingMs] = useState<number | null>(null)
@@ -91,14 +90,6 @@ export default function PreflightPage() {
       ctx?.drawImage(videoRef.current, 0, 0, 320, 240)
       setPhotoTaken(true)
       setGate('camera', 'pass')
-      // Upload photo to Supabase Storage
-      canvasRef.current.toBlob(async (blob) => {
-        if (!blob) return
-        try {
-          const fileName = `preflight/${examId}_${Date.now()}.jpg`
-          await supabase.storage.from('exam-photos').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
-        } catch (e) { console.warn('Photo upload:', e) }
-      }, 'image/jpeg', 0.8)
     } else {
       setGate('camera', 'pass')
     }
@@ -158,44 +149,16 @@ export default function PreflightPage() {
     } catch { }
   }
 
-  const [examData, setExamData] = useState<any>(null)
-  const [showLoading, setShowLoading] = useState(false)
-
-  // Start exam - go directly to first section with loading transition
+  // Start exam
   async function startExam() {
-    setShowLoading(true)
     // Stop camera stream
     cameraStream?.getTracks().forEach(t => t.stop())
-    
-    // Load exam data for section routing
-    const { data: ed } = await supabase.from('exams').select('*,exam_templates(*)').eq('id', examId).single()
-    if (!ed) { router.push('/exam'); return }
-    
     // Update exam status
-    if (ed.status === 'pending') {
-      await supabase.from('exams').update({
-        status: 'in_progress',
-        started_at: new Date().toISOString()
-      }).eq('id', examId)
-    }
-    
-    // Determine first section
-    const ROLE_SECTION_ORDER: Record<string, string[]> = {
-      general: ['grammar','reading','listening','writing','speaking'],
-      flight_deck: ['grammar','reading','listening','writing','speaking'],
-      cabin_crew: ['grammar','listening','reading','speaking','writing'],
-      atc: ['grammar','listening','reading','speaking','writing'],
-      maintenance: ['grammar','reading','writing','listening','speaking'],
-      ground_staff: ['grammar','reading','listening','writing','speaking'],
-    }
-    const template = ed.exam_templates
-    const role = template.role_profile || 'general'
-    const sectionOrder = ROLE_SECTION_ORDER[role] || ROLE_SECTION_ORDER.general
-    const firstSection = sectionOrder.find((s: string) => (template[`${s}_count`] || 0) > 0) || sectionOrder[0]
-    
-    // Brief loading pause for UX
-    await new Promise(r => setTimeout(r, 3500))
-    router.push(`/exam/${examId}/section/${firstSection}`)
+    await supabase.from('exams').update({
+      status: 'in_progress',
+      started_at: new Date().toISOString()
+    }).eq('id', examId)
+    router.push(`/exam/${examId}/start`)
   }
 
   const allPassed = completedCount === 5
@@ -525,16 +488,12 @@ export default function PreflightPage() {
                 fontSize: '18px', fontWeight: 700, color: '#111', margin: 0,
                 fontFamily: "'Montserrat', sans-serif",
               }}>KVKK / GDPR Consent</h3>
-              <div style={{display:'flex',gap:'6px'}}>
-                <button onClick={() => setKvkkLang('tr')} style={{padding:'4px 12px',borderRadius:'6px',border:'1px solid #E5E7EB',background:kvkkLang==='tr'?'#2563EB':'#F9FAFB',color:kvkkLang==='tr'?'#fff':'#6B7280',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>TR</button>
-                <button onClick={() => setKvkkLang('en')} style={{padding:'4px 12px',borderRadius:'6px',border:'1px solid #E5E7EB',background:kvkkLang==='en'?'#2563EB':'#F9FAFB',color:kvkkLang==='en'?'#fff':'#6B7280',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>EN</button>
-                <button onClick={() => setKvkkOpen(false)} style={{
+              <button onClick={() => setKvkkOpen(false)} style={{
                 width: '32px', height: '32px', borderRadius: '50%',
                 border: '1px solid #E5E7EB', background: '#F9FAFB',
                 cursor: 'pointer', fontSize: '16px', color: '#6B7280',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',marginLeft:'4px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>×</button>
-              </div>
             </div>
             <div
               ref={kvkkRef}
@@ -544,97 +503,39 @@ export default function PreflightPage() {
                 fontSize: '14px', color: '#374151', lineHeight: 1.7,
               }}
             >
-              {kvkkLang === 'tr' ? (<>
               <p style={{ marginBottom: '16px' }}>
-                <strong>AVİLİNGO KİŞİSEL VERİLERİN KORUNMASI VE İŞLENMESİ HAKKINDA AYDINLATMA METNİ</strong>
+                <strong>KVKK (Kişisel Verilerin Korunması Kanunu) / GDPR Compliance Notice</strong>
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>1. Veri Sorumlusu</strong><br/>
-                6698 sayılı Kişisel Verilerin Korunması Kanunu ("Kanun") uyarınca, kişisel verileriniz; veri sorumlusu olarak Avilingo ("Şirket") tarafından aşağıda açıklanan kapsamda işlenebilecektir.
+                By participating in this examination, you acknowledge and consent to the following data processing activities:
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>2. Kişisel Verilerin İşlenme Amacı</strong><br/>
-                Şirketimiz tarafından toplanan kişisel verileriniz (Kimlik, İletişim, Görsel ve İşitsel Kayıtlar, Mesleki Deneyim vb.) aşağıdaki amaçlarla işlenmektedir:
-              </p>
-              <ul style={{ marginBottom: '12px', paddingLeft: '20px' }}>
-                <li style={{marginBottom:'4px'}}>Havacılık İngilizcesi seviye tespit sınavlarının (STS) gerçekleştirilmesi ve değerlendirilmesi,</li>
-                <li style={{marginBottom:'4px'}}>Online sınavlarda kimlik doğrulamanın yapılması ve sınav güvenliğinin sağlanması,</li>
-                <li style={{marginBottom:'4px'}}>Kamera ve mikrofon kayıtları ile sınav bütünlüğünün korunması,</li>
-                <li style={{marginBottom:'4px'}}>Ekran aktivitesi ve sekme değişikliklerinin izlenmesi (kopya önleme),</li>
-                <li style={{marginBottom:'4px'}}>Sözleşmesel yükümlülüklerin ifası ve fatura süreçlerinin yönetilmesi,</li>
-                <li style={{marginBottom:'4px'}}>Yetkili kamu kurum ve kuruluşlarına bilgi verilmesi.</li>
-              </ul>
-              <p style={{ marginBottom: '12px' }}>
-                <strong>3. İşlenen Kişisel Verileriniz</strong><br/>
-                Avilingo sınav platformu aracılığıyla aşağıdaki veriler işlenmektedir:
-              </p>
-              <ul style={{ marginBottom: '12px', paddingLeft: '20px' }}>
-                <li style={{marginBottom:'4px'}}><strong>Kimlik Bilgileri:</strong> Ad, soyad, e-posta adresi.</li>
-                <li style={{marginBottom:'4px'}}><strong>Görsel ve İşitsel Kayıtlar:</strong> Sınav süresince alınan kamera görüntüleri, speaking bölümündeki ses kayıtları.</li>
-                <li style={{marginBottom:'4px'}}><strong>Sınav Verileri:</strong> Cevaplarınız, writing metinleriniz, sınav süreniz ve puanlarınız.</li>
-                <li style={{marginBottom:'4px'}}><strong>İşlem Güvenliği:</strong> IP adresi, tarayıcı bilgisi, sekme değişikliği logları, bağlantı hızı.</li>
-              </ul>
-              <p style={{ marginBottom: '12px' }}>
-                <strong>4. Kişisel Verilerin Aktarılması</strong><br/>
-                Kişisel verileriniz; yasal yükümlülüklerimizi yerine getirmek amacıyla yetkili kamu kurumlarına ve hizmetin ifası için iş birliği yaptığımız teknik altyapı sağlayıcılarına (sunucu hizmeti) Kanun'un 8. ve 9. maddelerine uygun olarak aktarılabilir. Sınav sonuçlarınız yalnızca sınavı atayan kuruluşun yetkili personeli ile paylaşılır. Verileriniz, açık rızanız olmaksızın üçüncü taraf pazarlama şirketleriyle paylaşılmaz.
+                <strong>1. Personal Data Collection:</strong> Your name, email address, and examination responses will be collected and processed for assessment purposes. This data is necessary for the legitimate purpose of evaluating your language proficiency.
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>5. Veri Saklama Süresi</strong><br/>
-                Sınav kayıtları ve sonuçları, sınav tarihinden itibaren 24 ay süreyle güvenli sunucularda saklanır. Bu sürenin sonunda, yasal zorunluluk olmadıkça güvenli bir şekilde silinir.
+                <strong>2. Camera and Microphone Recording:</strong> During the examination, your camera feed will be recorded for identity verification and proctoring purposes. Your microphone will be used to capture audio responses in the speaking section. These recordings are stored securely and will be retained for a maximum period of 12 months.
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>6. Veri Sahibinin Hakları (Madde 11)</strong><br/>
-                Kanun'un 11. maddesi uyarınca; verilerinizin işlenip işlenmediğini öğrenme, işlenmişse bilgi talep etme, amacına uygun kullanılıp kullanılmadığını öğrenme, düzeltilmesini veya silinmesini isteme haklarına sahipsiniz. Taleplerinizi <strong>info@avilingo.com</strong> adresine iletebilirsiniz.
-              </p>
-              <p style={{ marginTop: '20px', fontWeight: 600, background: '#F0F9FF', padding: '12px 16px', borderRadius: '8px', border: '1px solid #BAE6FD', color: '#0369A1' }}>
-                Aşağıdaki onay kutucuğunu işaretleyerek, yukarıda belirtilen kişisel veri işleme faaliyetlerini okuduğunuzu, anladığınızı ve kabul ettiğinizi beyan edersiniz.
-              </p>
-              </>) : (<>
-              <p style={{ marginBottom: '16px' }}>
-                <strong>AVILINGO PERSONAL DATA PROTECTION AND PROCESSING NOTICE</strong>
+                <strong>3. Screen and Activity Monitoring:</strong> Your screen activity, tab switches, and browser focus events will be monitored throughout the examination to ensure academic integrity. Any violations will be logged and may result in examination invalidation.
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>1. Data Controller</strong><br/>
-                In accordance with the Personal Data Protection Law No. 6698 ("Law"), your personal data may be processed by Avilingo ("Company") as the data controller, within the scope described below.
+                <strong>4. Data Storage and Security:</strong> All collected data is stored on secure, encrypted servers. Access to examination data is restricted to authorized personnel only, including examiners and system administrators.
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>2. Purpose of Data Processing</strong><br/>
-                Your personal data collected through our platform is processed for the following purposes:
-              </p>
-              <ul style={{ marginBottom: '12px', paddingLeft: '20px' }}>
-                <li style={{marginBottom:'4px'}}>Conducting and evaluating Aviation English proficiency examinations (STS),</li>
-                <li style={{marginBottom:'4px'}}>Identity verification and ensuring exam security during online examinations,</li>
-                <li style={{marginBottom:'4px'}}>Camera and microphone recordings to maintain examination integrity,</li>
-                <li style={{marginBottom:'4px'}}>Monitoring screen activity and tab switches (anti-cheating measures),</li>
-                <li style={{marginBottom:'4px'}}>Fulfilling contractual obligations and managing invoicing processes,</li>
-                <li style={{marginBottom:'4px'}}>Providing information to authorized public institutions upon request.</li>
-              </ul>
-              <p style={{ marginBottom: '12px' }}>
-                <strong>3. Personal Data Collected</strong><br/>
-                The following data is processed through the Avilingo examination platform:
-              </p>
-              <ul style={{ marginBottom: '12px', paddingLeft: '20px' }}>
-                <li style={{marginBottom:'4px'}}><strong>Identity Information:</strong> Name, surname, email address.</li>
-                <li style={{marginBottom:'4px'}}><strong>Visual and Audio Records:</strong> Camera footage during the exam, voice recordings in the speaking section.</li>
-                <li style={{marginBottom:'4px'}}><strong>Examination Data:</strong> Your answers, writing responses, exam duration, and scores.</li>
-                <li style={{marginBottom:'4px'}}><strong>Security Data:</strong> IP address, browser information, tab switch logs, connection speed.</li>
-              </ul>
-              <p style={{ marginBottom: '12px' }}>
-                <strong>4. Transfer of Personal Data</strong><br/>
-                Your personal data may be transferred to authorized public institutions and technical infrastructure providers in accordance with Articles 8 and 9 of the Law. Your exam results are shared only with authorized personnel of the organization that assigned the exam. Your data will not be shared with third-party marketing companies without your explicit consent.
+                <strong>5. Data Retention:</strong> Examination results and recordings will be retained for a period of 24 months from the date of examination, after which they will be securely deleted unless retention is required by applicable law.
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>5. Data Retention Period</strong><br/>
-                Examination records and results are stored on secure servers for 24 months from the date of the examination. After this period, they are securely deleted unless retention is required by applicable law.
+                <strong>6. Your Rights:</strong> Under KVKK/GDPR, you have the right to access, rectify, delete, or restrict the processing of your personal data. You may exercise these rights by contacting the data controller at the email address provided in your examination invitation.
               </p>
               <p style={{ marginBottom: '12px' }}>
-                <strong>6. Your Rights (Article 11)</strong><br/>
-                Under Article 11 of the Law, you have the right to learn whether your data is processed, request information, learn whether it is used in accordance with its purpose, and request its correction or deletion. You may submit your requests to <strong>info@avilingo.com</strong>.
+                <strong>7. Third-Party Sharing:</strong> Your examination data will not be shared with third parties except as required by law or as necessary for the completion of the assessment process (e.g., authorized evaluators).
               </p>
-              <p style={{ marginTop: '20px', fontWeight: 600, background: '#F0F9FF', padding: '12px 16px', borderRadius: '8px', border: '1px solid #BAE6FD', color: '#0369A1' }}>
-                By checking the box below, you confirm that you have read, understood, and consent to the personal data processing activities described above.
+              <p style={{ marginBottom: '12px' }}>
+                <strong>8. Cookies and Technical Data:</strong> This platform uses essential cookies and collects technical data (browser type, IP address, connection speed) solely for the purpose of ensuring a smooth examination experience.
               </p>
-              </>)}
+              <p style={{ marginTop: '24px', fontWeight: 600 }}>
+                By accepting below, you confirm that you have read, understood, and consent to the processing of your personal data as described above.
+              </p>
             </div>
             <div style={{
               padding: '16px 24px', borderTop: '1px solid #E5E7EB',
@@ -645,7 +546,7 @@ export default function PreflightPage() {
                   fontSize: '12px', color: '#D97706', textAlign: 'center',
                   padding: '6px 12px', background: '#FFFBEB', borderRadius: '8px',
                 }}>
-                  {kvkkLang === 'tr' ? '↓ Lütfen metnin tamamını okumak için aşağı kaydırın' : '↓ Please scroll to the bottom to read the entire agreement'}
+                  ↓ Please scroll to the bottom to read the entire agreement
                 </div>
               )}
               <label style={{
@@ -661,9 +562,7 @@ export default function PreflightPage() {
                   style={{ width: '18px', height: '18px', accentColor: '#2563EB' }}
                 />
                 <span style={{ fontSize: '13px', color: '#374151' }}>
-                  {kvkkLang === 'tr' 
-                    ? 'KVKK aydınlatma metnini okudum ve kişisel verilerimin işlenmesini kabul ediyorum'
-                    : 'I have read and accept the KVKK/GDPR data processing agreement'}
+                  I have read and accept the KVKK/GDPR data processing agreement
                 </span>
               </label>
               <button
@@ -678,41 +577,12 @@ export default function PreflightPage() {
                   fontFamily: "'Inter', sans-serif",
                 }}
               >
-                {kvkkLang === 'tr' ? 'Kabul Et ve Devam Et' : 'Accept & Continue'}
+                Accept & Continue
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Loading Overlay */}
-      {showLoading && (
-        <LoadingOverlay />
-      )}
-    </div>
-  )
-}
-
-function LoadingOverlay() {
-  const [step, setStep] = useState(0)
-  const steps = ['Running security checks...', 'Preparing your questions...', 'Starting camera & microphone...', 'Your exam is ready...']
-  useEffect(() => {
-    const t = setInterval(() => setStep(s => Math.min(s + 1, steps.length - 1)), 800)
-    return () => clearInterval(t)
-  }, [])
-  return (
-    <div style={{position:'fixed',inset:0,background:'#0A1628',display:'flex',alignItems:'center',justifyContent:'center',zIndex:2000,flexDirection:'column',gap:'28px'}}>
-      <div style={{fontSize:'32px',fontWeight:900,color:'#fff',fontFamily:"'Montserrat',sans-serif",letterSpacing:'1px'}}>AVILINGO</div>
-      <div style={{width:'48px',height:'48px',border:'4px solid rgba(255,255,255,0.1)',borderTop:'4px solid #3B82F6',borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
-      <div style={{display:'flex',flexDirection:'column',gap:'10px',alignItems:'center'}}>
-        {steps.map((s, i) => (
-          <div key={i} style={{fontSize:'14px',color: i<=step ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.2)',transition:'color 0.5s',display:'flex',alignItems:'center',gap:'8px'}}>
-            {i < step ? <span style={{color:'#4ADE80'}}>✓</span> : i === step ? <span style={{color:'#3B82F6'}}>●</span> : <span style={{color:'rgba(255,255,255,0.15)'}}>○</span>}
-            {s}
-          </div>
-        ))}
-      </div>
-      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )
 }
