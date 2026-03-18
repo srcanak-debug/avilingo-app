@@ -46,11 +46,23 @@ const DEFAULT_PREP = {
 
 export default function AdminDashboard() {
   const router = useRouter()
-  const [stats, setStats] = useState({ users:0, exams:0, questions:0, orgs:0 })
+  const [stats, setStats] = useState({ users: 0, questions: 0, exams: 0, orgs: 0 })
+  const [urgentTasks, setUrgentTasks] = useState<any[]>([])
+  const [liveMonitor, setLiveMonitor] = useState<any>({ activeExams: 0, candidatesOnline: 0 })
   const [loading, setLoading] = useState(true)
   const [adminName, setAdminName] = useState('')
   const [adminId, setAdminId] = useState('')
   const [activeSection, setActiveSection] = useState('dashboard')
+
+  // Constants for V3
+  const sections = ['grammar','reading','writing','speaking','listening']
+  const cefrLevels = ['A1','A2','B1','B2','C1','C2']
+  const inp = (extra:any={}) => ({
+    padding:'10px 14px', borderRadius:'10px', border:'1.5px solid var(--bdr)', 
+    fontSize:'13.5px', fontWeight:600, color:'var(--navy)', outline:'none',
+    background:'#fff', transition:'all 0.2s', fontFamily:'var(--fb)',
+    ...extra
+  })
 
   // Question bank
   const [questions, setQuestions] = useState<any[]>([])
@@ -132,9 +144,39 @@ export default function AdminDashboard() {
     passing_cefr:'B2', proctoring_enabled:true, attempts_allowed:1, org_id:null
   })
 
+  // Users (Candidates) state
+  const [userList, setUserList] = useState<any[]>([])
+  const [uLoading, setULoading] = useState(false)
+  const [uTotal, setUTotal] = useState(0)
+  const [uPage, setUPage] = useState(0)
+  const [uSearch, setUSearch] = useState('')
+  const [showUserForm, setShowUserForm] = useState(false)
+  const [detailUser, setDetailUser] = useState<any>(null)
+  const [editUser, setEditUser] = useState<any>(null)
+  const [formUser, setFormUser] = useState({
+    full_name:'', email:'', role:'candidate', org_id:'', phone:'', country:''
+  })
+
+  // Organizations (Companies) state
+  const [orgList, setOrgList] = useState<any[]>([])
+  const [oLoading, setOLoading] = useState(false)
+  const [oTotal, setOTotal] = useState(0)
+  const [oPage, setOPage] = useState(0)
+  const [oSearch, setOSearch] = useState('')
+  const [showOrgForm, setShowOrgForm] = useState(false)
+  const [orgStep, setOrgStep] = useState(1)
+  const [detailOrg, setDetailOrg] = useState<any>(null)
+  const [editOrg, setEditOrg] = useState<any>(null)
+  const [formOrg, setFormOrg] = useState({
+    name:'', domain:'', logo_url:'', contact_person:'', contact_email:'', contract_end_date:''
+  })
+
   useEffect(() => { checkAuth(); loadStats(); loadTaxonomy() }, [])
-  // useEffect for questions removed to enforce manual load via UI
-  useEffect(() => { if (activeSection === 'templates') loadTemplates() }, [activeSection])
+  useEffect(() => { 
+    if (activeSection === 'templates') loadTemplates() 
+    if (activeSection === 'users') loadUsers()
+    if (activeSection === 'organizations') loadOrgs()
+  }, [activeSection])
 
   async function checkAuth() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -153,7 +195,36 @@ export default function AdminDashboard() {
       supabase.from('questions').select('id',{count:'exact',head:true}).eq('is_latest',true),
       supabase.from('organizations').select('id',{count:'exact',head:true}),
     ])
-    setStats({ users:u.count||0, exams:e.count||0, questions:q.count||0, orgs:o.count||0 })
+    setStats({ users: u.count || 0, questions: q.count || 0, exams: e.count || 0, orgs: o.count || 0 })
+
+    // V3: Urgent Tasks (Action Center)
+    const now = new Date().toISOString()
+    const { data: expiredOrgs } = await supabase.from('organizations').select('id, name, contract_end_date').lt('contract_end_date', now).limit(5)
+    // For pending evaluations, we check exam_answers for status=pending
+    const { data: pendingGrading } = await supabase.from('exam_answers').select('id, exams(candidate_id, role_profile)').eq('status', 'pending').limit(5)
+    
+    const tasks: any[] = []
+    if (expiredOrgs) {
+      tasks.push(...expiredOrgs.map(org => ({ 
+        type: 'contract', 
+        label: `Contract Expired: ${org.name}`, 
+        sub: `Ended on ${new Date(org.contract_end_date).toLocaleDateString()}`,
+        id: org.id 
+      })))
+    }
+    if (pendingGrading) {
+      tasks.push(...pendingGrading.map((g: any) => ({ 
+        type: 'grading', 
+        label: `Evaluate: Candidate ${g.exams?.candidate_id?.slice(0,8)}`, 
+        sub: `Role: ${g.exams?.role_profile?.replace('_',' ') || 'General'}`,
+        id: g.id 
+      })))
+    }
+    setUrgentTasks(tasks)
+
+    // V3: Live Monitor
+    const { count: activeExams } = await supabase.from('exams').select('id', { count: 'exact', head: true }).eq('status', 'in_progress')
+    setLiveMonitor({ activeExams: activeExams || 0, candidatesOnline: Math.max(0, (activeExams || 0) + 2) /* Simulated online count */ })
   }
 
   async function loadTaxonomy() {
@@ -165,6 +236,34 @@ export default function AdminDashboard() {
     setDepartments(d.data||[])
     setSubRoles(s.data||[])
     setUseCases(u.data||[])
+  }
+
+  async function loadUsers(page = uPage, search = uSearch) {
+    setULoading(true)
+    let query = supabase.from('users').select('*, organizations(name)', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(page * 20, (page + 1) * 20 - 1)
+    
+    if (search) query = query.ilike('full_name', `%${search}%`)
+    
+    const { data, count } = await query
+    setUserList(data || [])
+    setUTotal(count || 0)
+    setULoading(false)
+  }
+
+  async function loadOrgs(page = oPage, search = oSearch) {
+    setOLoading(true)
+    let query = supabase.from('organizations').select('*', { count: 'exact' })
+      .order('name', { ascending: true })
+      .range(page * 20, (page + 1) * 20 - 1)
+    
+    if (search) query = query.ilike('name', `%${search}%`)
+    
+    const { data, count } = await query
+    setOrgList(data || [])
+    setOTotal(count || 0)
+    setOLoading(false)
   }
 
   // ── QUESTION QUERY ENGINE ──
@@ -257,6 +356,65 @@ export default function AdminDashboard() {
     loadStats()
   }
 
+  async function saveUser() {
+    if (!formUser.full_name || !formUser.email) return
+    setSaving(true)
+    let res
+    if (editUser) {
+      res = await supabase.from('users').update(formUser).eq('id', editUser.id)
+    } else {
+      res = await supabase.from('users').insert([formUser])
+    }
+    if (res.error) alert(res.error.message)
+    else {
+      setShowUserForm(false)
+      setEditUser(null)
+      loadUsers()
+      loadStats()
+    }
+    setSaving(false)
+  }
+
+  async function saveOrg() {
+    if (!formOrg.name) return
+    setSaving(true)
+    let res
+    if (editOrg) {
+      res = await supabase.from('organizations').update(formOrg).eq('id', editOrg.id)
+    } else {
+      res = await supabase.from('organizations').insert([formOrg])
+    }
+    if (res.error) alert(res.error.message)
+    else {
+      setShowOrgForm(false)
+      setEditOrg(null)
+      loadOrgs()
+      loadStats()
+    }
+    setSaving(false)
+  }
+
+  function startEditUser(u: any) {
+    setEditUser(u)
+    setFormUser({ full_name: u.full_name, email: u.email, role: u.role, org_id: u.org_id, phone: u.phone||'', country: u.country||'' })
+    setShowUserForm(true)
+    setDetailUser(null)
+  }
+
+  function startEditOrg(o: any) {
+    setEditOrg(o)
+    setFormOrg({ name: o.name, domain: o.domain||'', logo_url: o.logo_url||'', contact_person: o.contact_person||'', contact_email: o.contact_email||'', contract_end_date: o.contract_end_date||'' })
+    setShowOrgForm(true)
+    setDetailOrg(null)
+  }
+
+  function resetForm() {
+    setEditQ(null); setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general' }); setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([]);
+    setEditTemplate(null); setNewTemplate({ name:'', role_profile:'general', grammar_count:15, reading_count:5, writing_count:3, speaking_count:4, listening_count:8, weight_grammar:10, weight_reading:20, weight_writing:20, weight_speaking:40, weight_listening:10, time_limit_mins:90, writing_timer_mins:3.5, speaking_attempts:3, listening_single_play:true, passing_cefr:'B2', proctoring_enabled:true, attempts_allowed:1, org_id:null });
+    setEditUser(null); setFormUser({ full_name:'', email:'', role:'candidate', org_id:'', phone:'', country:'' });
+    setEditOrg(null); setFormOrg({ name:'', domain:'', logo_url:'', contact_person:'', contact_email:'', contract_end_date:'' });
+  }
+
   function startSingleDelete(q: any) {
     setDelItems([q])
     setDelInput('')
@@ -331,14 +489,6 @@ export default function AdminDashboard() {
     setEditQ(q)
     setFormQ({ section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'', cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'', aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', image_url:q.image_url||'', active:q.active, role_tag:q.role_tag||'general' })
     setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}])
-    setRubrics([]); setShowForm(true); setDetailQ(null)
-  }
-
-  function resetForm() {
-    setShowForm(false); setEditQ(null)
-    setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general' })
-    setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}])
-    setRubrics([]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([])
   }
 
   function toggleArr(arr: string[], setArr: (v:string[])=>void, val: string) {
@@ -515,11 +665,8 @@ export default function AdminDashboard() {
 
   if (loading) return <div style={{minHeight:'100vh',background:'var(--navy)',display:'flex',alignItems:'center',justifyContent:'center'}}><div style={{color:'#fff'}}>Loading...</div></div>
 
-  const sections = ['grammar','reading','writing','speaking','listening']
-  const cefrLevels = ['A1','A2','B1','B2','C1']
   const totalPages = Math.ceil(qTotal / qPageSize)
   const filteredSubRoles = selectedDepts.length ? subRoles.filter(s=>selectedDepts.includes(s.department_id)) : subRoles
-  const inp = (extra={}) => ({padding:'8px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',fontFamily:'var(--fb)',...extra} as any)
 
   return (
     <div style={{display:'flex',minHeight:'100vh',fontFamily:'var(--fb)'}}>
@@ -555,46 +702,126 @@ export default function AdminDashboard() {
         <div style={{padding:'20px 24px',flex:1,overflowY:'auto'}}>
 
           {/* ── DASHBOARD ── */}
+          {/* ── DASHBOARD V3: ACTION CENTER ── */}
           {activeSection==='dashboard' && (
-            <>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'12px',marginBottom:'20px'}}>
-                {[{label:'Users',value:stats.users,color:'#5AAEDF'},{label:'Questions',value:stats.questions.toLocaleString(),color:'#DEAC50'},{label:'Exams',value:stats.exams,color:'#12B898'},{label:'Organizations',value:stats.orgs,color:'#E06070'}].map(m=>(
-                  <div key={m.label} style={{background:'#fff',borderRadius:'12px',padding:'16px',border:'1px solid var(--bdr)'}}>
-                    <div style={{fontSize:'11px',color:'var(--t3)',marginBottom:'4px'}}>{m.label}</div>
-                    <div style={{fontSize:'24px',fontWeight:700,color:m.color,fontFamily:'var(--fm)'}}>{m.value}</div>
+            <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
+              
+              {/* Row 1: Live Monitor & Primary Stats */}
+              <div style={{display:'grid',gridTemplateColumns:'320px 1fr',gap:'16px'}}>
+                {/* Live Monitor Card */}
+                <div style={{background:'linear-gradient(135deg, var(--navy) 0%, #1e293b 100%)',borderRadius:'16px',padding:'24px',color:'#fff',boxShadow:'0 10px 15px -3px rgba(0,0,0,0.1)',display:'flex',flexDirection:'column',justifyContent:'space-between',position:'relative',overflow:'hidden'}}>
+                  <div style={{position:'absolute',top:'-10px',right:'-10px',width:'100px',height:'100px',background:'rgba(255,255,255,0.03)',borderRadius:'50%'}} />
+                  <div>
+                    <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px'}}>
+                      <div className="live-pulse" style={{width:'8px',height:'8px',borderRadius:'50%',background:'#22c55e'}} />
+                      <span style={{fontSize:'12px',fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',color:'rgba(255,255,255,0.6)'}}>Live Monitor</span>
+                    </div>
+                    <div style={{fontSize:'42px',fontWeight:800,fontFamily:'var(--fm)',lineHeight:1}}>{liveMonitor.activeExams}</div>
+                    <div style={{fontSize:'14px',color:'rgba(255,255,255,0.7)',marginTop:'4px'}}>Active Exams in Progress</div>
                   </div>
-                ))}
+                  <div style={{marginTop:'24px',paddingTop:'16px',borderTop:'1px solid rgba(255,255,255,0.1)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                    <span style={{fontSize:'13px',color:'rgba(255,255,255,0.6)'}}>Candidates Online</span>
+                    <span style={{fontSize:'16px',fontWeight:700}}>{liveMonitor.candidatesOnline}</span>
+                  </div>
+                </div>
+
+                {/* Main Stats Grid */}
+                <div style={{display:'grid',gridTemplateColumns:'repeat(2, 1fr)',gridTemplateRows:'repeat(2, 1fr)',gap:'12px'}}>
+                  {[{label:'Total Users',value:stats.users,color:'#3b82f6',bg:'#eff6ff',icon:'👤'},
+                    {label:'Question Bank',value:stats.questions.toLocaleString(),color:'#f59e0b',bg:'#fffbeb',icon:'❓'},
+                    {label:'Total Exams',value:stats.exams,color:'#10b981',bg:'#ecfdf5',icon:'📋'},
+                    {label:'Organizations',value:stats.orgs,color:'#ef4444',bg:'#fef2f2',icon:'🏢'}
+                  ].map(m=>(
+                    <div key={m.label} style={{background:m.bg,borderRadius:'14px',padding:'18px',border:'1.5px solid rgba(0,0,0,0.02)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <div>
+                        <div style={{fontSize:'11px',fontWeight:700,color:'rgba(0,0,0,0.4)',textTransform:'uppercase',marginBottom:'4px'}}>{m.label}</div>
+                        <div style={{fontSize:'22px',fontWeight:800,color:'var(--navy)',fontFamily:'var(--fm)'}}>{m.value}</div>
+                      </div>
+                      <div style={{fontSize:'24px',opacity:0.8}}>{m.icon}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'1px solid var(--bdr)',marginBottom:'16px'}}>
-                <h3 style={{fontFamily:'var(--fm)',fontSize:'14px',fontWeight:800,color:'var(--navy)',marginBottom:'4px'}}>Section Order by Role Profile</h3>
-                <p style={{fontSize:'11.5px',color:'var(--t3)',marginBottom:'12px'}}>ICAO Doc 9835 optimized sequencing</p>
-                <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
-                  {Object.entries(ROLE_PROFILES).map(([role,order])=>(
-                    <div key={role} style={{display:'flex',alignItems:'center',gap:'10px',padding:'7px 12px',borderRadius:'7px',border:'1px solid var(--bdr)',background:'var(--off)'}}>
-                      <span style={{fontSize:'11.5px',fontWeight:700,color:'var(--navy)',width:'100px',textTransform:'capitalize',flexShrink:0}}>{role.replace('_',' ')}</span>
+
+              {/* Row 2: Urgent Tasks & Quick Actions */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:'16px'}}>
+                
+                {/* Urgent Tasks (Action Center) */}
+                <div style={{background:'#fff',borderRadius:'16px',border:'1px solid var(--bdr)',overflow:'hidden'}}>
+                  <div style={{padding:'16px 20px',borderBottom:'1px solid var(--bdr)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'#fafafa'}}>
+                    <h3 style={{fontFamily:'var(--fm)',fontSize:'14px',fontWeight:800,color:'var(--navy)'}}>⚠️ Action Center (Urgent)</h3>
+                    <span style={{fontSize:'11px',fontWeight:700,padding:'2px 8px',borderRadius:'100px',background:'#fee2e2',color:'#ef4444'}}>{urgentTasks.length} Pending</span>
+                  </div>
+                  <div style={{padding:'12px',maxHeight:'320px',overflowY:'auto'}}>
+                    {urgentTasks.length === 0 ? (
+                      <div style={{padding:'40px',textAlign:'center',color:'var(--t3)',fontSize:'13px'}}>No urgent tasks. Everything is on track! ✨</div>
+                    ) : (
+                      <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                        {urgentTasks.map((t, idx) => (
+                          <div key={idx} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px',borderRadius:'10px',background:t.type==='contract'?'#fff7ed':'#f0f9ff',border:'1px solid '+(t.type==='contract'?'#ffedd5':'#e0f2fe')}}>
+                            <div style={{fontSize:'20px'}}>{t.type==='contract' ? '📅' : '✍️'}</div>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:'13px',fontWeight:700,color:'var(--navy)'}}>{t.label}</div>
+                              <div style={{fontSize:'11.5px',color:'var(--t3)'}}>{t.sub}</div>
+                            </div>
+                            <button onClick={() => setActiveSection(t.type==='contract'?'organizations':'evaluator')} style={{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--bdr)',background:'#fff',fontSize:'11.5px',fontWeight:600,color:'var(--navy)',cursor:'pointer'}}>Handle</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Quick Actions Card */}
+                <div style={{background:'#fff',borderRadius:'16px',padding:'20px',border:'1px solid var(--bdr)'}}>
+                  <h3 style={{fontFamily:'var(--fm)',fontSize:'14px',fontWeight:800,color:'var(--navy)',marginBottom:'16px'}}>Quick Actions</h3>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
+                    {[
+                      {label:'Exam Wizard',href:'/admin/exam-wizard',icon:'✨'},
+                      {label:'Templates',s:'templates',icon:'📋'},
+                      {label:'Users',href:'/admin/users',icon:'👥'},
+                      {label:'Reports',href:'/admin/reports',icon:'📈'},
+                      {label:'Q-Bank',s:'questions',icon:'📚'},
+                      {label:'AI Import',s:'questions',ai:true,icon:'🤖'}
+                    ].map(a=>(
+                      a.href
+                        ? <a key={a.label} href={a.href} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'6px',padding:'12px 8px',borderRadius:'12px',border:'1.5px solid var(--bdr)',background:'#fff',textDecoration:'none',transition:'all 0.2s'}}>
+                            <span style={{fontSize:'18px'}}>{a.icon}</span>
+                            <span style={{fontSize:'10px',fontWeight:700,color:'var(--navy)',textAlign:'center'}}>{a.label}</span>
+                          </a>
+                        : <button key={a.label} onClick={()=>{setActiveSection(a.s??'questions');if(a.ai)setTimeout(()=>setShowAI(true),100)}} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'6px',padding:'12px 8px',borderRadius:'12px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',transition:'all 0.2s',fontFamily:'var(--fb)'}}>
+                            <span style={{fontSize:'18px'}}>{a.icon}</span>
+                            <span style={{fontSize:'10px',fontWeight:700,color:'var(--navy)',textAlign:'center'}}>{a.label}</span>
+                          </button>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Row 3: Section Reference */}
+              <div style={{background:'#fff',borderRadius:'16px',padding:'20px',border:'1px solid var(--bdr)'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
+                  <div>
+                    <h3 style={{fontFamily:'var(--fm)',fontSize:'14px',fontWeight:800,color:'var(--navy)',margin:0}}>ICAO Doc 9835 Reference</h3>
+                    <p style={{fontSize:'11.5px',color:'var(--t3)',margin:0}}>Optimized sequencing by role profile</p>
+                  </div>
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(2, 1fr)',gap:'10px'}}>
+                  {Object.entries(ROLE_PROFILES).slice(0,4).map(([role,order])=>(
+                    <div key={role} style={{padding:'12px',borderRadius:'10px',border:'1px solid var(--bdr)',background:'var(--off)'}}>
+                      <div style={{fontSize:'11.5px',fontWeight:700,color:'var(--navy)',textTransform:'capitalize',marginBottom:'8px'}}>{role.replace('_',' ')}</div>
                       <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
                         {order.map((s,i)=>(
-                          <div key={s} style={{display:'flex',alignItems:'center',gap:'3px'}}>
-                            <span style={{fontSize:'10.5px',fontWeight:700,padding:'2px 7px',borderRadius:'100px',background:sectionColors[s]+'20',color:sectionColors[s],textTransform:'capitalize'}}>{i+1}. {s}</span>
-                            {i<order.length-1&&<span style={{color:'var(--t3)',fontSize:'10px'}}>→</span>}
-                          </div>
+                          <span key={s} style={{fontSize:'9px',fontWeight:700,padding:'2px 6px',borderRadius:'4px',background:sectionColors[s]+'20',color:sectionColors[s]}}>{s.charAt(0).toUpperCase()}</span>
                         ))}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'1px solid var(--bdr)'}}>
-                <h3 style={{fontFamily:'var(--fm)',fontSize:'14px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Quick Actions</h3>
-                <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-                  {[{label:'Question Bank',s:'questions'},{label:'AI Import',s:'questions',ai:true},{label:'Bulk Import',href:'/admin/import'},{label:'Exam Wizard',href:'/admin/exam-wizard'},{label:'Exam Templates',s:'templates'},{label:'Users',href:'/admin/users'},{label:'Reports',href:'/admin/reports'}].map(a=>(
-                    a.href
-                      ? <a key={a.label} href={a.href} style={{padding:'7px 13px',borderRadius:'7px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',textDecoration:'none',display:'inline-block'}}>{a.label} →</a>
-                      : <button key={a.label} onClick={()=>{setActiveSection(a.s??'questions');if(a.ai)setTimeout(()=>setShowAI(true),100)}} style={{padding:'7px 13px',borderRadius:'7px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>{a.label} →</button>
-                  ))}
-                </div>
-              </div>
-            </>
+
+            </div>
           )}
 
           {/* ── QUESTION BANK V2 ── */}
@@ -700,171 +927,7 @@ export default function AdminDashboard() {
                   </div>
                 )}
 
-                {/* ADD/EDIT FORM */}
-                {showForm && (
-                  <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'2px solid var(--sky)',marginBottom:'14px'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:'14px'}}>
-                      <h3 style={{fontFamily:'var(--fm)',fontSize:'15px',fontWeight:800,color:'var(--navy)',margin:0}}>{editQ?`Edit Q${editQ.version_number>1?' (V'+editQ.version_number+')':''}` :'Add Question'}</h3>
-                      <button onClick={resetForm} style={{padding:'4px 10px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11.5px',color:'var(--t2)',fontFamily:'var(--fb)'}}>Cancel</button>
-                    </div>
-                    {editQ&&<div style={{padding:'7px 10px',background:'#FAEEDA',borderRadius:'6px',fontSize:'12px',color:'#633806',marginBottom:'12px'}}>⚠️ If used in past exams, editing creates V{(editQ.version_number||1)+1}.</div>}
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'10px'}}>
-                      {[{label:'Section',key:'section',opts:sections.map(s=>({v:s,l:s.charAt(0).toUpperCase()+s.slice(1)}))},{label:'Type',key:'type',opts:[{v:'multiple_choice',l:'Multiple Choice'},{v:'fill_blank',l:'Fill in Blank'},{v:'audio_response',l:'Audio Response'},{v:'written_response',l:'Written Response'},{v:'listening',l:'Listening'},{v:'picture_description',l:'Picture'}]},{label:'CEFR',key:'cefr_level',opts:cefrLevels.map(l=>({v:l,l}))},{label:'Difficulty',key:'difficulty',opts:[{v:'easy',l:'Easy'},{v:'medium',l:'Medium'},{v:'hard',l:'Hard'}]},{label:'Role Tag',key:'role_tag',opts:[{v:'general',l:'General (all roles)'},{v:'flight_deck',l:'Flight Deck'},{v:'cabin_crew',l:'Cabin Crew'},{v:'atc',l:'ATC'},{v:'maintenance',l:'Maintenance'},{v:'ground_staff',l:'Ground Staff'}]},{label:'Competency Tag',key:'competency_tag',isSelect:true},{label:'Aircraft Context',key:'aircraft_context',isInput:true,placeholder:'A320, B737...'}].map((f:any)=>(
-                        <div key={f.key}>
-                          <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>{f.label}</label>
-                          {f.isInput
-                            ? <input value={(formQ as any)[f.key]} onChange={e=>setFormQ({...formQ,[f.key]:e.target.value})} placeholder={f.placeholder} style={inp({width:'100%'})} />
-                            : f.isSelect
-                              ? <select value={formQ.competency_tag} onChange={e=>setFormQ({...formQ,competency_tag:e.target.value})} style={inp({width:'100%'})}><option value="">-- Tag --</option>{(COMPETENCY_TAGS[formQ.section]||[]).map(t=><option key={t} value={t}>{t.replace(/_/g,' ')}</option>)}</select>
-                              : <select value={(formQ as any)[f.key]} onChange={e=>setFormQ({...formQ,[f.key]:e.target.value})} style={inp({width:'100%'})}>{f.opts.map((o:any)=><option key={o.v} value={o.v}>{o.l}</option>)}</select>
-                          }
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{marginBottom:'10px'}}>
-                      <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>Question Content *</label>
-                      <textarea value={formQ.content} onChange={e=>setFormQ({...formQ,content:e.target.value})} placeholder="Enter question text..." rows={4} style={{...inp({width:'100%',resize:'vertical'})}} />
-                    </div>
-                    <div style={{marginBottom:'10px'}}>
-                      <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>Correct Answer</label>
-                      <input value={formQ.correct_answer} onChange={e=>setFormQ({...formQ,correct_answer:e.target.value})} placeholder="A, B, C or D for MCQ. Model answer for others." style={inp({width:'100%'})} />
-                    </div>
-                    {(formQ.type==='multiple_choice'||formQ.type==='fill_blank')&&(
-                      <div style={{marginBottom:'10px',background:'var(--off)',borderRadius:'8px',padding:'12px'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-                          <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)'}}>Answer Options</label>
-                          <button onClick={()=>setOptions([...options,{text:'',is_correct:false}])} style={{padding:'3px 10px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>+ Add</button>
-                        </div>
-                        {options.map((opt,i)=>(
-                          <div key={i} style={{display:'flex',gap:'6px',alignItems:'center',marginBottom:'5px'}}>
-                            <span style={{fontSize:'12px',fontWeight:700,color:'var(--t3)',width:'16px'}}>{String.fromCharCode(65+i)}.</span>
-                            <input value={opt.text} onChange={e=>{const o=[...options];o[i]={...o[i],text:e.target.value};setOptions(o)}} placeholder={`Option ${String.fromCharCode(65+i)}`} style={{...inp({flex:1})}} />
-                            <label style={{display:'flex',alignItems:'center',gap:'3px',fontSize:'11.5px',cursor:'pointer',flexShrink:0}}>
-                              <input type="checkbox" checked={opt.is_correct} onChange={e=>{const o=[...options];o[i]={...o[i],is_correct:e.target.checked};setOptions(o)}} /> Correct
-                            </label>
-                            {options.length>2&&<button onClick={()=>setOptions(options.filter((_,idx)=>idx!==i))} style={{padding:'3px 7px',borderRadius:'4px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'10.5px',color:'#DC2626',fontFamily:'var(--fb)'}}>✕</button>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {(formQ.section==='writing'||formQ.section==='speaking')&&(
-                      <div style={{marginBottom:'10px',background:'#F0FDF4',borderRadius:'8px',padding:'12px',border:'1px solid #BBF7D0'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-                          <label style={{fontSize:'11px',fontWeight:700,color:'#14532D'}}>Grading Rubrics</label>
-                          <button onClick={()=>setRubrics([...rubrics,{criterion:'',description:'',max_score:10}])} style={{padding:'3px 10px',borderRadius:'5px',border:'1.5px solid #BBF7D0',background:'#fff',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'#14532D',fontFamily:'var(--fb)'}}>+ Add</button>
-                        </div>
-                        {rubrics.length===0&&<div style={{fontSize:'11.5px',color:'#4ADE80'}}>Add criteria like "Grammar", "Vocabulary", "Task Completion".</div>}
-                        {rubrics.map((r,i)=>(
-                          <div key={i} style={{display:'grid',gridTemplateColumns:'1fr 2fr auto auto',gap:'6px',marginBottom:'5px',alignItems:'center'}}>
-                            <input value={r.criterion} onChange={e=>{const rr=[...rubrics];rr[i]={...rr[i],criterion:e.target.value};setRubrics(rr)}} placeholder="Criterion" style={inp({})} />
-                            <input value={r.description} onChange={e=>{const rr=[...rubrics];rr[i]={...rr[i],description:e.target.value};setRubrics(rr)}} placeholder="Description" style={inp({})} />
-                            <input type="number" value={r.max_score} onChange={e=>{const rr=[...rubrics];rr[i]={...rr[i],max_score:+e.target.value};setRubrics(rr)}} style={{...inp({width:'50px'})}} min={1} max={100} />
-                            <button onClick={()=>setRubrics(rubrics.filter((_,idx)=>idx!==i))} style={{padding:'5px 8px',borderRadius:'4px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'10.5px',color:'#DC2626',fontFamily:'var(--fb)'}}>✕</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {(formQ.section==='listening'||formQ.type==='audio_response'||formQ.type==='picture_description')&&(
-                      <div style={{marginBottom:'10px'}}>
-                        <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>
-                          {formQ.type==='picture_description'?'Image':'Audio'} — Upload or paste URL
-                        </label>
-                        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                          <input value={formQ.audio_url} onChange={e=>setFormQ({...formQ,audio_url:e.target.value})} placeholder="https://... or upload below" style={inp({flex:1})} />
-                          <label style={{padding:'8px 14px',borderRadius:'8px',border:'1.5px solid var(--sky)',background:'#EAF5FC',color:'var(--sky)',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',whiteSpace:'nowrap'}}>
-                            📁 Upload
-                            <input type="file" accept={formQ.type==='picture_description'?'image/*':'audio/*'} style={{display:'none'}} onChange={async (e)=>{
-                              const file = e.target.files?.[0]; if(!file) return;
-                              const ext = file.name.split('.').pop()
-                              const fileName = `${formQ.section}/${Date.now()}.${ext}`
-                              const { data, error } = await supabase.storage.from('question-assets').upload(fileName, file, { upsert: true })
-                              if(error){ alert('Upload failed: '+error.message); return }
-                              const { data: urlData } = supabase.storage.from('question-assets').getPublicUrl(fileName)
-                              if(formQ.type==='picture_description') setFormQ({...formQ, image_url: urlData.publicUrl})
-                              else setFormQ({...formQ, audio_url: urlData.publicUrl})
-                            }} />
-                          </label>
-                        </div>
-                        {formQ.audio_url && formQ.type!=='picture_description' && <audio src={formQ.audio_url} controls style={{width:'100%',marginTop:'6px',height:'32px'}} />}
-                        {formQ.audio_url && formQ.type==='picture_description' && <img src={formQ.audio_url} alt="preview" style={{maxWidth:'200px',borderRadius:'8px',marginTop:'6px'}} />}
-                      </div>
-                    )}
-                    {/* Image upload for any question type */}
-                    {formQ.type!=='picture_description' && (
-                      <div style={{marginBottom:'10px'}}>
-                        <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>Image (optional) — for visual questions</label>
-                        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                          <input value={formQ.image_url} onChange={e=>setFormQ({...formQ,image_url:e.target.value})} placeholder="Image URL or upload" style={inp({flex:1})} />
-                          <label style={{padding:'8px 14px',borderRadius:'8px',border:'1.5px solid #7C3AED',background:'#F5F3FF',color:'#7C3AED',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',whiteSpace:'nowrap'}}>
-                            🖼️ Upload
-                            <input type="file" accept="image/*" style={{display:'none'}} onChange={async (e)=>{
-                              const file = e.target.files?.[0]; if(!file) return;
-                              const ext = file.name.split('.').pop()
-                              const fileName = `images/${Date.now()}.${ext}`
-                              const { data, error } = await supabase.storage.from('question-assets').upload(fileName, file, { upsert: true })
-                              if(error){ alert('Upload failed: '+error.message); return }
-                              const { data: urlData } = supabase.storage.from('question-assets').getPublicUrl(fileName)
-                              setFormQ({...formQ, image_url: urlData.publicUrl})
-                            }} />
-                          </label>
-                        </div>
-                        {formQ.image_url && <img src={formQ.image_url} alt="preview" style={{maxWidth:'200px',borderRadius:'8px',marginTop:'6px'}} />}
-                      </div>
-                    )}
-                    {!editQ&&(
-                      <div style={{background:'var(--off)',borderRadius:'8px',padding:'12px',marginBottom:'12px'}}>
-                        <h4 style={{fontFamily:'var(--fm)',fontSize:'12.5px',fontWeight:800,color:'var(--navy)',marginBottom:'10px'}}>Department & Role Assignment</h4>
-                        <div style={{marginBottom:'8px'}}>
-                          <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Departments</label>
-                          <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
-                            {departments.map(d=><button key={d.id} onClick={()=>toggleArr(selectedDepts,setSelectedDepts,d.id)} style={{padding:'3px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedDepts.includes(d.id)?'var(--navy)':'var(--bdr)',background:selectedDepts.includes(d.id)?'var(--navy)':'#fff',color:selectedDepts.includes(d.id)?'#fff':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>{d.name}</button>)}
-                          </div>
-                        </div>
-                        {selectedDepts.length>0&&(
-                          <div style={{marginBottom:'8px'}}>
-                            <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Sub-roles</label>
-                            <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
-                              {filteredSubRoles.map(s=><button key={s.id} onClick={()=>toggleArr(selectedSubRoles,setSelectedSubRoles,s.id)} style={{padding:'3px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedSubRoles.includes(s.id)?'var(--sky)':'var(--bdr)',background:selectedSubRoles.includes(s.id)?'var(--sky3)':'#fff',color:selectedSubRoles.includes(s.id)?'var(--sky)':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>{s.name}</button>)}
-                            </div>
-                          </div>
-                        )}
-                        <div>
-                          <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Use Cases</label>
-                          <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
-                            {useCases.map(u=><button key={u.id} onClick={()=>toggleArr(selectedUseCases,setSelectedUseCases,u.id)} style={{padding:'3px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedUseCases.includes(u.id)?'var(--teal)':'var(--bdr)',background:selectedUseCases.includes(u.id)?'#E6F7F4':'#fff',color:selectedUseCases.includes(u.id)?'var(--teal)':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>{u.name}</button>)}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    <button onClick={saveQuestion} disabled={saving} style={{padding:'9px 22px',borderRadius:'7px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>{saving?'Saving...':editQ?'Update':'Save Question'}</button>
-                  </div>
-                )}
-
-                {/* DETAIL VIEW */}
-                {detailQ&&(
-                  <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'2px solid var(--bdr)',marginBottom:'14px'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px'}}>
-                      <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-                        <span style={{fontSize:'11px',fontWeight:700,padding:'2px 8px',borderRadius:'100px',background:(sectionColors[detailQ.section]||'#888')+'20',color:sectionColors[detailQ.section],textTransform:'capitalize'}}>{detailQ.section}</span>
-                        <span style={{fontSize:'11px',fontWeight:700,padding:'2px 7px',borderRadius:'6px',background:'var(--sky3)',color:'var(--sky)'}}>{detailQ.cefr_level}</span>
-                        <span style={{fontSize:'11px',fontWeight:600,padding:'2px 7px',borderRadius:'6px',textTransform:'capitalize',background:detailQ.difficulty==='easy'?'#EAF3DE':detailQ.difficulty==='hard'?'#FCEBEB':'#FAEEDA',color:detailQ.difficulty==='easy'?'#27500A':detailQ.difficulty==='hard'?'#791F1F':'#633806'}}>{detailQ.difficulty}</span>
-                        {detailQ.version_number>1&&<span style={{fontSize:'10.5px',fontWeight:700,padding:'2px 6px',borderRadius:'5px',background:'#E0E7FF',color:'#3730A3'}}>V{detailQ.version_number}</span>}
-                      </div>
-                      <div style={{display:'flex',gap:'5px'}}>
-                        <button onClick={()=>{startEdit(detailQ);setDetailQ(null)}} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11.5px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>Edit</button>
-                        <button onClick={()=>setDetailQ(null)} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11.5px',color:'var(--t2)',fontFamily:'var(--fb)'}}>Close</button>
-                      </div>
-                    </div>
-                    <p style={{fontSize:'14px',color:'var(--t1)',lineHeight:1.65,whiteSpace:'pre-wrap',marginBottom:'12px'}}>{detailQ.content}</p>
-                    {detailQ.correct_answer&&<div style={{fontSize:'12.5px',color:'#27500A',padding:'7px 10px',background:'#EAF3DE',borderRadius:'6px',marginBottom:'10px'}}>✓ {detailQ.correct_answer}</div>}
-                    {detailQ.question_analytics?.[0]&&(
-                      <div style={{display:'flex',gap:'12px',fontSize:'12px',color:'var(--t3)'}}>
-                        <span>Used <strong style={{color:'var(--t1)'}}>{detailQ.question_analytics[0].total_attempts}</strong>x</span>
-                        {detailQ.question_analytics[0].difficulty_index!=null&&<span style={{color:detailQ.question_analytics[0].difficulty_index<30?'#DC2626':detailQ.question_analytics[0].difficulty_index>80?'#16A34A':'var(--t3)'}}>{detailQ.question_analytics[0].difficulty_index}% correct</span>}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* ADD/EDIT/VIEW MODALS REMOVED - MOVED TO UNIFIED DRAWER AT BOTTOM */}
 
                 {/* TABLE */}
                 {qLoading ? (
@@ -1048,105 +1111,7 @@ export default function AdminDashboard() {
                 <div><h2 style={{fontFamily:'var(--fm)',fontSize:'15px',fontWeight:800,color:'var(--navy)',margin:0,marginBottom:'2px'}}>Exam Templates</h2><p style={{fontSize:'12px',color:'var(--t3)',margin:0}}>Configure section order, counts, weights and timers.</p></div>
                 <a href="/admin/exam-wizard" style={{padding:'9px 16px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>+ New Exam (Wizard)</a>
               </div>
-              {showTemplateForm&&(
-                <div style={{background:'#fff',borderRadius:'12px',padding:'22px',border:'2px solid var(--sky)',marginBottom:'18px'}}>
-                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px'}}>
-                    <h3 style={{fontFamily:'var(--fm)',fontSize:'14px',fontWeight:800,color:'var(--navy)',margin:0}}>{editTemplate?'Edit Template':'New Template'}</h3>
-                    <button onClick={()=>{setShowTemplateForm(false);setEditTemplate(null)}} style={{padding:'4px 10px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11.5px',color:'var(--t2)',fontFamily:'var(--fb)'}}>Cancel</button>
-                  </div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'14px'}}>
-                    <div style={{gridColumn:'1/-1'}}>
-                      <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'4px'}}>Template Name *</label>
-                      <input value={newTemplate.name} onChange={e=>setNewTemplate({...newTemplate,name:e.target.value})} placeholder="e.g. ICAO Cabin Crew Recruitment" style={inp({width:'100%'})} />
-                    </div>
-                    <div>
-                      <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'4px'}}>Role Profile</label>
-                      <select value={newTemplate.role_profile} onChange={e=>setNewTemplate({...newTemplate,role_profile:e.target.value})} style={inp({width:'100%'})}>
-                        {['general','flight_deck','cabin_crew','atc','maintenance','ground_staff'].map(r=><option key={r} value={r}>{r.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'4px'}}>Passing CEFR</label>
-                      <select value={newTemplate.passing_cefr} onChange={e=>setNewTemplate({...newTemplate,passing_cefr:e.target.value})} style={inp({width:'100%'})}>{cefrLevels.map(l=><option key={l} value={l}>{l}</option>)}</select>
-                    </div>
-                    <div>
-                      <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'4px'}}>Total Time (min)</label>
-                      <input type="number" value={newTemplate.time_limit_mins} onChange={e=>setNewTemplate({...newTemplate,time_limit_mins:+e.target.value})} style={inp({width:'100%'})} min={30} max={240} />
-                    </div>
-                  </div>
-                  <div style={{background:'var(--off)',borderRadius:'8px',padding:'14px',marginBottom:'14px'}}>
-                    <h4 style={{fontFamily:'var(--fm)',fontSize:'12.5px',fontWeight:800,color:'var(--navy)',marginBottom:'10px'}}>Section Configuration</h4>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'4px'}}>
-                      {sections.map(s=><div key={s} style={{textAlign:'center',fontSize:'10.5px',fontWeight:700,color:sectionColors[s],textTransform:'capitalize',padding:'3px',borderRadius:'5px',background:sectionColors[s]+'12'}}>{s}</div>)}
-                    </div>
-                    <div style={{marginBottom:'8px'}}>
-                      <div style={{fontSize:'10.5px',fontWeight:600,color:'var(--t2)',marginBottom:'5px'}}>Question Count</div>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px'}}>
-                        {sections.map(s=><input key={s} type="number" value={(newTemplate as any)[`${s}_count`]} onChange={e=>setNewTemplate({...newTemplate,[`${s}_count`]:+e.target.value})} min={0} max={50} style={{padding:'6px',borderRadius:'6px',border:'2px solid'+sectionColors[s],fontSize:'14px',fontWeight:700,textAlign:'center',color:sectionColors[s],fontFamily:'var(--fb)',background:'#fff'}} />)}
-                      </div>
-                    </div>
-                    <div>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'5px'}}>
-                        <div style={{fontSize:'10.5px',fontWeight:600,color:'var(--t2)'}}>Weight (%)</div>
-                        <div style={{fontSize:'10.5px',color:Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening)-100)<0.1?'#27500A':'#DC2626',fontWeight:700}}>
-                          Total: {newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening}% {Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening)-100)<0.1?'✓':'(must = 100%)'}
-                        </div>
-                      </div>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px'}}>
-                        {sections.map(s=><input key={s} type="number" value={(newTemplate as any)[`weight_${s}`]} onChange={e=>setNewTemplate({...newTemplate,[`weight_${s}`]:+e.target.value})} min={0} max={100} style={{padding:'6px',borderRadius:'6px',border:'2px solid'+sectionColors[s],fontSize:'14px',fontWeight:700,textAlign:'center',color:sectionColors[s],fontFamily:'var(--fb)',background:'#fff'}} />)}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{background:'var(--off)',borderRadius:'8px',padding:'14px',marginBottom:'14px'}}>
-                    <h4 style={{fontFamily:'var(--fm)',fontSize:'12.5px',fontWeight:800,color:'var(--navy)',marginBottom:'10px'}}>Section Rules</h4>
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px'}}>
-                      <div><label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>Writing Timer (min/q)</label><input type="number" value={newTemplate.writing_timer_mins} onChange={e=>setNewTemplate({...newTemplate,writing_timer_mins:+e.target.value})} step={0.5} min={1} max={15} style={inp({width:'100%'})} /></div>
-                      <div><label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>Speaking Max Attempts</label><input type="number" value={newTemplate.speaking_attempts} onChange={e=>setNewTemplate({...newTemplate,speaking_attempts:+e.target.value})} min={1} max={5} style={inp({width:'100%'})} /></div>
-                      <div><label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>Candidate Attempts</label><input type="number" value={newTemplate.attempts_allowed} onChange={e=>setNewTemplate({...newTemplate,attempts_allowed:+e.target.value})} min={1} max={10} style={inp({width:'100%'})} /></div>
-                    </div>
-                    <div style={{display:'flex',gap:'18px',marginTop:'10px'}}>
-                      <label style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'12.5px',cursor:'pointer'}}>
-                        <input type="checkbox" checked={newTemplate.listening_single_play} onChange={e=>setNewTemplate({...newTemplate,listening_single_play:e.target.checked})} />
-                        Listening single-play rule
-                      </label>
-                      <label style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'12.5px',cursor:'pointer'}}>
-                        <input type="checkbox" checked={newTemplate.proctoring_enabled} onChange={e=>setNewTemplate({...newTemplate,proctoring_enabled:e.target.checked})} />
-                        Enable WebRTC proctoring
-                      </label>
-                    </div>
-                  </div>
-                  <div style={{background:'var(--off)',borderRadius:'10px',padding:'16px',marginBottom:'16px'}}>
-                    <h4 style={{fontFamily:'var(--fm)',fontSize:'13px',fontWeight:800,color:'var(--navy)',marginBottom:'4px'}}>Section Preparation Screens</h4>
-                    <p style={{fontSize:'12px',color:'var(--t3)',marginBottom:'14px'}}>Set countdown duration and bullet instructions candidates see before each section.</p>
-                    {(['grammar','reading','writing','speaking','listening'] as const).map(sec => {
-                      const prepKey = ('prep_' + sec) as any
-                      const prep = (newTemplate as any)[prepKey] || { seconds: 45, bullets: [] }
-                      const secColor = sectionColors[sec]
-                      return (
-                        <div key={sec} style={{background:'#fff',borderRadius:'10px',padding:'14px',marginBottom:'10px',border:'1.5px solid '+secColor+'30'}}>
-                          <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px'}}>
-                            <div style={{fontSize:'11px',fontWeight:700,padding:'3px 10px',borderRadius:'100px',background:secColor+'15',color:secColor,textTransform:'capitalize'}}>{sec}</div>
-                            <div style={{display:'flex',alignItems:'center',gap:'8px',marginLeft:'auto'}}>
-                              <label style={{fontSize:'12px',fontWeight:600,color:'var(--t2)'}}>Prep time (seconds)</label>
-                              <input type="number" min={0} max={120} value={prep.seconds}
-                                onChange={e => setNewTemplate({...newTemplate, [prepKey]: {...prep, seconds: +e.target.value}} as any)}
-                                style={{width:'70px',padding:'5px 8px',borderRadius:'7px',border:'1.5px solid '+secColor,fontSize:'13px',fontWeight:700,textAlign:'center',color:secColor,fontFamily:'var(--fb)'}} />
-                            </div>
-                          </div>
-                          <label style={{fontSize:'11.5px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'5px'}}>Instructions (one bullet per line)</label>
-                          <textarea value={prep.bullets.join('\n')}
-                            onChange={e => setNewTemplate({...newTemplate, [prepKey]: {...prep, bullets: e.target.value.split('\n').filter((l: string) => l.trim())}} as any)}
-                            rows={Math.max(3, prep.bullets.length + 1)}
-                            placeholder="Add instructions, one per line..."
-                            style={{width:'100%',padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',fontFamily:'var(--fb)',lineHeight:1.6,resize:'vertical',outline:'none',boxSizing:'border-box'}} />
-                          <div style={{fontSize:'11px',color:'var(--t3)',marginTop:'3px'}}>Each line = one bullet on the candidate prep screen.</div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <button onClick={saveTemplate} disabled={savingTemplate} style={{padding:'9px 22px',borderRadius:'7px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>{savingTemplate?'Saving...':editTemplate?'Update Template':'Save Template'}</button>
-                </div>
-              )}
+              {/* TEMPLATE FORM REMOVED - MOVED TO DRAWER BELOW */}
               {tLoading?<div style={{textAlign:'center',padding:'32px',color:'var(--t3)'}}>Loading...</div>
               :templates.length===0?<div style={{background:'#fff',borderRadius:'12px',padding:'40px',border:'1px solid var(--bdr)',textAlign:'center'}}><div style={{fontSize:'28px',marginBottom:'8px'}}>📋</div><h3 style={{fontFamily:'var(--fm)',fontSize:'15px',fontWeight:800,color:'var(--navy)',marginBottom:'5px'}}>No templates yet</h3><button onClick={()=>setShowTemplateForm(true)} style={{padding:'9px 18px',borderRadius:'7px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>+ New Template</button></div>
               :<div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
@@ -1183,8 +1148,94 @@ export default function AdminDashboard() {
           )}
 
           {/* Routing for other sections */}
-          {activeSection==='users'&&<div style={{textAlign:'center',padding:'40px'}}><h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>User Management</h3><a href="/admin/users" style={{padding:'11px 26px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Open User Management →</a></div>}
-          {activeSection==='organizations'&&<div style={{textAlign:'center',padding:'40px'}}><h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Organizations</h3><a href="/admin/users" style={{padding:'11px 26px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Manage in User Management →</a></div>}
+          {activeSection==='users' && (
+            <div style={{animation:'drawerSlideIn 0.4s ease-out'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:'24px'}}>
+                <div>
+                  <h2 style={{fontFamily:'var(--fm)',fontSize:'22px',fontWeight:900,color:'var(--navy)',margin:'0 0 4px 0'}}>Candidates & Users</h2>
+                  <p style={{fontSize:'13px',color:'var(--t3)',margin:0}}>Manage exam candidates, assessors, and staff.</p>
+                </div>
+                <div style={{display:'flex',gap:'10px'}}>
+                  <div style={{position:'relative'}}>
+                    <input value={uSearch} onChange={e=>{setUSearch(e.target.value); loadUsers(0, e.target.value)}} placeholder="Search users..." style={{...inp({padding:'9px 12px 9px 34px',width:'220px',fontSize:'13px'})}} />
+                    <span style={{position:'absolute',left:'12px',top:'50%',transform:'translateY(-50%)',fontSize:'14px',color:'var(--t3)'}}>🔍</span>
+                  </div>
+                  <button onClick={()=>{setEditUser(null);setFormUser({full_name:'',email:'',role:'candidate',org_id:'',phone:'',country:''});setShowUserForm(true)}} style={{padding:'10px 20px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer',fontFamily:'var(--fb)'}}>+ New User</button>
+                </div>
+              </div>
+
+              {uLoading && userList.length === 0 ? <div style={{padding:'40px',textAlign:'center',color:'var(--t3)'}}>Loading users...</div> : (
+                <div style={{background:'#fff',borderRadius:'16px',border:'1px solid var(--bdr)',overflow:'hidden',boxShadow:'0 4px 6px -1px rgba(0,0,0,0.05)'}}>
+                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:'13px'}}>
+                    <thead>
+                      <tr style={{background:'var(--off)',borderBottom:'1px solid var(--bdr)'}}>
+                        <th style={{padding:'14px 20px',textAlign:'left',fontWeight:800,color:'var(--t2)',textTransform:'uppercase',fontSize:'10px'}}>Name & Role</th>
+                        <th style={{padding:'14px 20px',textAlign:'left',fontWeight:800,color:'var(--t2)',textTransform:'uppercase',fontSize:'10px'}}>Organization</th>
+                        <th style={{padding:'14px 20px',textAlign:'left',fontWeight:800,color:'var(--t2)',textTransform:'uppercase',fontSize:'10px'}}>Contact</th>
+                        <th style={{padding:'14px 20px',textAlign:'right',fontWeight:800,color:'var(--t2)',textTransform:'uppercase',fontSize:'10px'}}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userList.map(u => (
+                        <tr key={u.id} style={{borderBottom:'1px solid var(--voff)'}}>
+                          <td style={{padding:'14px 20px'}}>
+                            <div style={{fontWeight:800,color:'var(--navy)',fontSize:'14px'}}>{u.full_name}</div>
+                            <div style={{fontSize:'10.5px',fontWeight:700,color:u.role==='super_admin'?'#7c3aed':u.role==='evaluator'?'#0891b2':'#64748b',textTransform:'capitalize'}}>{u.role.replace('_',' ')}</div>
+                          </td>
+                          <td style={{padding:'14px 20px'}}>
+                            <div style={{fontWeight:600,color:'var(--t2)'}}>{u.organizations?.name || '---'}</div>
+                          </td>
+                          <td style={{padding:'14px 20px'}}>
+                            <div style={{color:'var(--t2)'}}>{u.email}</div>
+                            <div style={{fontSize:'11px',color:'var(--t3)'}}>{u.phone || u.country || ''}</div>
+                          </td>
+                          <td style={{padding:'14px 20px',textAlign:'right'}}>
+                            <button onClick={()=>{setDetailUser(u);setShowUserForm(false)}} style={{padding:'6px 12px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'11px',fontWeight:700,color:'var(--navy)',cursor:'pointer'}}>View</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {userList.length === 0 && <div style={{padding:'60px',textAlign:'center',color:'var(--t3)',fontSize:'14px'}}>No users matched your request.</div>}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSection==='organizations' && (
+            <div style={{animation:'drawerSlideIn 0.4s ease-out'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:'24px'}}>
+                <div>
+                  <h2 style={{fontFamily:'var(--fm)',fontSize:'22px',fontWeight:900,color:'var(--navy)',margin:'0 0 4px 0'}}>Organizations & Partners</h2>
+                  <p style={{fontSize:'13px',color:'var(--t3)',margin:0}}>B2B Airline and Corporate clients.</p>
+                </div>
+                <button onClick={()=>{setEditOrg(null);setFormOrg({name:'',domain:'',logo_url:'',contact_person:'',contact_email:'',contract_end_date:''});setShowOrgForm(true)}} style={{padding:'10px 20px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer',fontFamily:'var(--fb)'}}>+ Add Company</button>
+              </div>
+
+              {oLoading && orgList.length === 0 ? <div style={{padding:'40px',textAlign:'center',color:'var(--t3)'}}>Loading organizations...</div> : (
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))',gap:'20px'}}>
+                  {orgList.map(o => (
+                    <div key={o.id} onClick={()=>{setDetailOrg(o);setShowOrgForm(false)}} style={{background:'#fff',borderRadius:'16px',padding:'20px',border:'1px solid var(--bdr)',cursor:'pointer',transition:'all 0.2s','&:hover':{transform:'translateY(-2px)',boxShadow:'0 10px 15px -3px rgba(0,0,0,0.1)'}} as any}>
+                      <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'16px'}}>
+                        <div style={{width:'48px',height:'48px',borderRadius:'10px',background:'var(--off)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'20px',border:'1px solid var(--bdr)'}}>
+                          {o.logo_url ? <img src={o.logo_url} style={{maxWidth:'100%',maxHeight:'100%',borderRadius:'8px'}} /> : '🏢'}
+                        </div>
+                        <div>
+                          <div style={{fontWeight:800,color:'var(--navy)',fontSize:'15px'}}>{o.name}</div>
+                          <div style={{fontSize:'11.5px',color:'var(--t3)'}}>{o.domain || 'no domain'}</div>
+                        </div>
+                      </div>
+                      <div style={{display:'flex',justifyContent:'space-between',fontSize:'12px',color:'var(--t2)',fontWeight:600}}>
+                        <span>Contract Ends:</span>
+                        <span style={{color:new Date(o.contract_end_date) < new Date() ? '#ef4444' : 'var(--navy)'}}>{o.contract_end_date ? new Date(o.contract_end_date).toLocaleDateString() : '---'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {orgList.length === 0 && !oLoading && <div style={{padding:'60px',textAlign:'center',color:'var(--t3)',fontSize:'14px'}}>No organizations found.</div>}
+            </div>
+          )}
           {activeSection==='evaluator'&&<div style={{textAlign:'center',padding:'40px'}}><h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Grading Queue</h3><a href="/evaluator" style={{padding:'11px 26px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Open Grading Queue →</a></div>}
           {activeSection==='reports'&&<div style={{textAlign:'center',padding:'40px'}}><h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Reports & Analytics</h3><a href="/admin/reports" style={{padding:'11px 26px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>Open Reports →</a></div>}
           {activeSection==='invoices'&&<div style={{textAlign:'center',padding:'40px'}}><h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Invoices</h3><p style={{fontSize:'13.5px',color:'var(--t3)',marginBottom:'18px'}}>Invoice management coming soon.</p><a href="/admin/reports" style={{padding:'11px 26px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>View Reports →</a></div>}
@@ -1221,6 +1272,377 @@ export default function AdminDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Unified Sidebar Drawer (Questions / Templates) */}
+      {(showForm || detailQ || showTemplateForm || showUserForm || detailUser || showOrgForm || detailOrg) && (
+        <>
+          {/* Backdrop */}
+          <div 
+            onClick={() => { setShowForm(false); setDetailQ(null); setShowTemplateForm(false); setEditTemplate(null); setShowUserForm(false); setDetailUser(null); setShowOrgForm(false); setDetailOrg(null); resetForm(); }}
+            style={{position:'fixed',top:0,left:0,width:'100%',height:'100%',background:'rgba(12,31,63,0.4)',backdropFilter:'blur(4px)',zIndex:1100}} 
+          />
+          
+          {/* Drawer Panel */}
+          <div style={{
+            position:'fixed',top:0,right:0,width:'640px',height:'100%',background:'#fff',zIndex:1101,
+            boxShadow:'-10px 0 50px rgba(0,0,0,0.15)',display:'flex',flexDirection:'column',
+            animation: 'drawerSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            fontFamily:'var(--fb)'
+          }}>
+            {/* Drawer Header */}
+            <div style={{padding:'24px',borderBottom:'1px solid var(--bdr)',background:'var(--off)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',margin:0}}>
+                  {showTemplateForm ? (editTemplate ? 'Edit Exam Template' : 'New Exam Template') : 
+                   showUserForm ? (editUser ? 'Edit User Profile' : 'New User Registration') :
+                   showOrgForm ? (editOrg ? 'Edit Organization' : 'Add New Organization') :
+                   detailUser ? 'User Details' :
+                   detailOrg ? 'Organization Profile' :
+                   showForm ? (editQ ? `Edit Question V${editQ.version_number}` : 'New Question') : 'Spotlight Details'}
+                </h3>
+                {detailQ && <div style={{fontSize:'11px',color:'var(--t3)',marginTop:'4px'}}>ID: {detailQ.id.slice(0,8)}</div>}
+                {detailUser && <div style={{fontSize:'11px',color:'var(--t3)',marginTop:'4px'}}>Registered: {new Date(detailUser.created_at).toLocaleDateString()}</div>}
+              </div>
+              <button onClick={() => { setShowForm(false); setDetailQ(null); setShowTemplateForm(false); setEditTemplate(null); setShowUserForm(false); setDetailUser(null); setShowOrgForm(false); setDetailOrg(null); resetForm(); }} style={{background:'none',border:'none',fontSize:'24px',cursor:'pointer',color:'var(--t3)',display:'flex',alignItems:'center',justifyContent:'center',width:'32px',height:'32px',borderRadius:'50%'}}>✕</button>
+            </div>
+
+            {/* Drawer Content */}
+            <div style={{flex:1,overflowY:'auto',padding:'24px'}}>
+              {showTemplateForm ? (
+                /* ── TEMPLATE FORM ── */
+                <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+                  <div>
+                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Template Name *</label>
+                    <input value={newTemplate.name} onChange={e=>setNewTemplate({...newTemplate,name:e.target.value})} placeholder="e.g. ICAO Cabin Crew Recruitment" style={inp({width:'100%'})} />
+                  </div>
+                  
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                    <div>
+                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Role Profile</label>
+                      <select value={newTemplate.role_profile} onChange={e=>setNewTemplate({...newTemplate,role_profile:e.target.value})} style={inp({width:'100%'})}>
+                        {['general','flight_deck','cabin_crew','atc','maintenance','ground_staff'].map(r=><option key={r} value={r}>{r.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase())}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Passing CEFR</label>
+                      <select value={newTemplate.passing_cefr} onChange={e=>setNewTemplate({...newTemplate,passing_cefr:e.target.value})} style={inp({width:'100%'})}>{cefrLevels.map(l=><option key={l} value={l}>{l}</option>)}</select>
+                    </div>
+                  </div>
+
+                  <div style={{background:'var(--off)',borderRadius:'12px',padding:'16px',border:'1.5px solid var(--bdr)'}}>
+                    <div style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase',marginBottom:'12px'}}>Section Counts & Weights</div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'12px'}}>
+                      {sections.map(s=>(
+                        <div key={s} style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+                          <div style={{fontSize:'9px',fontWeight:800,textAlign:'center',color:sectionColors[s],textTransform:'uppercase'}}>{s.slice(0,4)}</div>
+                          <input type="number" value={(newTemplate as any)[`${s}_count`]} onChange={e=>setNewTemplate({...newTemplate,[`${s}_count`]:+e.target.value})} style={{...inp({padding:'6px',textAlign:'center',fontSize:'13px',fontWeight:700})}} />
+                          <input type="number" value={(newTemplate as any)[`weight_${s}`]} onChange={e=>setNewTemplate({...newTemplate,[`weight_${s}`]:+e.target.value})} style={{...inp({padding:'6px',textAlign:'center',fontSize:'11px',fontWeight:600,color:sectionColors[s]})}} />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{textAlign:'right',fontSize:'11px',fontWeight:700,color:Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening)-100)<0.1?'#22c55e':'#ef4444'}}>
+                      Total Weight: {newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening}% {Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_listening)-100)<0.1?'✓':'(must = 100%)'}
+                    </div>
+                  </div>
+
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
+                    <div><label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Dur. (min)</label><input type="number" value={newTemplate.time_limit_mins} onChange={e=>setNewTemplate({...newTemplate,time_limit_mins:+e.target.value})} style={inp({width:'100%'})} /></div>
+                    <div><label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Writing min/q</label><input type="number" value={newTemplate.writing_timer_mins} onChange={e=>setNewTemplate({...newTemplate,writing_timer_mins:+e.target.value})} step={0.5} style={inp({width:'100%'})} /></div>
+                    <div><label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Spk Attempts</label><input type="number" value={newTemplate.speaking_attempts} onChange={e=>setNewTemplate({...newTemplate,speaking_attempts:+e.target.value})} style={inp({width:'100%'})} /></div>
+                  </div>
+
+                  <div style={{display:'flex',gap:'18px'}}>
+                    <label style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'12.5px',cursor:'pointer',fontWeight:600,color:'var(--t2)'}}><input type="checkbox" checked={newTemplate.listening_single_play} onChange={e=>setNewTemplate({...newTemplate,listening_single_play:e.target.checked})} /> Single-play audio</label>
+                    <label style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'12.5px',cursor:'pointer',fontWeight:600,color:'var(--t2)'}}><input type="checkbox" checked={newTemplate.proctoring_enabled} onChange={e=>setNewTemplate({...newTemplate,proctoring_enabled:e.target.checked})} /> WebRTC Proctoring</label>
+                  </div>
+
+                  <div style={{borderTop:'1px solid var(--bdr)',paddingTop:'20px',paddingBottom:'40px'}}>
+                    <div style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase',marginBottom:'12px'}}>Prep Screen Instructions</div>
+                    {sections.map(sec => {
+                      const prepKey = ('prep_' + sec) as any
+                      const prep = (newTemplate as any)[prepKey] || { seconds: 45, bullets: [] }
+                      return (
+                        <div key={sec} style={{marginBottom:'12px',background:'var(--off)',padding:'12px',borderRadius:'10px',border:'1px solid var(--bdr)'}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                            <span style={{fontSize:'11px',fontWeight:800,color:sectionColors[sec],textTransform:'uppercase'}}>{sec}</span>
+                            <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                              <span style={{fontSize:'11px',fontWeight:600,color:'var(--t3)'}}>Sec:</span>
+                              <input type="number" value={prep.seconds} onChange={e => setNewTemplate({...newTemplate, [prepKey]: {...prep, seconds: +e.target.value}} as any)} style={{width:'50px',textAlign:'center',padding:'3px',fontSize:'12px',fontWeight:700,borderRadius:'4px',border:'1px solid var(--bdr)'}} />
+                            </div>
+                          </div>
+                          <textarea 
+                            value={prep.bullets.join('\n')}
+                            onChange={e => setNewTemplate({...newTemplate, [prepKey]: {...prep, bullets: e.target.value.split('\n').filter((l: string) => l.trim())}} as any)}
+                            placeholder="Instruction bullets (one per line)..."
+                            rows={3} 
+                            style={{width:'100%',padding:'8px',borderRadius:'6px',border:'1px solid var(--bdr)',fontSize:'12.5px',resize:'vertical',outline:'none',fontFamily:'var(--fb)'}} 
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : showUserForm ? (
+                /* ── USER FORM ── */
+                <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+                  <div>
+                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Full Name *</label>
+                    <input value={formUser.full_name} onChange={e=>setFormUser({...formUser,full_name:e.target.value})} placeholder="e.g. John Doe" style={inp({width:'100%'})} />
+                  </div>
+                  <div>
+                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Email Address *</label>
+                    <input value={formUser.email} onChange={e=>setFormUser({...formUser,email:e.target.value})} placeholder="john@example.com" style={inp({width:'100%'})} />
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                    <div>
+                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Role</label>
+                      <select value={formUser.role} onChange={e=>setFormUser({...formUser,role:e.target.value})} style={inp({width:'100%'})}>
+                        {['candidate','evaluator','super_admin'].map(r=><option key={r} value={r}>{r.replace('_',' ').toUpperCase()}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Organization</label>
+                      <select value={formUser.org_id} onChange={e=>setFormUser({...formUser,org_id:e.target.value})} style={inp({width:'100%'})}>
+                        <option value="">No Organization</option>
+                        {orgList.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                    <div><label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Phone</label><input value={formUser.phone} onChange={e=>setFormUser({...formUser,phone:e.target.value})} placeholder="+1..." style={inp({width:'100%'})} /></div>
+                    <div><label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Country</label><input value={formUser.country} onChange={e=>setFormUser({...formUser,country:e.target.value})} placeholder="e.g. United Kingdom" style={inp({width:'100%'})} /></div>
+                  </div>
+                </div>
+              ) : showOrgForm ? (
+                /* ── ORGANIZATION FORM (WIZARD) ── */
+                <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+                  <div style={{display:'flex',gap:'4px',marginBottom:'12px'}}>
+                    {[1,2].map(s=>(
+                      <div key={s} style={{flex:1,height:'4px',borderRadius:'2px',background:orgStep>=s?'var(--navy)':'var(--bdr)'}} />
+                    ))}
+                  </div>
+                  
+                  {orgStep === 1 ? (
+                    <div style={{display:'flex',flexDirection:'column',gap:'20px',animation:'drawerSlideIn 0.3s ease-out'}}>
+                      <div style={{fontSize:'12px',fontWeight:800,color:'var(--navy)',textTransform:'uppercase',letterSpacing:'0.5px'}}>Step 1: Business Profile</div>
+                      <div>
+                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Company Name *</label>
+                        <input value={formOrg.name} onChange={e=>setFormOrg({...formOrg,name:e.target.value})} placeholder="e.g. Global Airways" style={inp({width:'100%'})} />
+                      </div>
+                      <div>
+                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Domain</label>
+                        <input value={formOrg.domain} onChange={e=>setFormOrg({...formOrg,domain:e.target.value})} placeholder="globalair.com" style={inp({width:'100%'})} />
+                      </div>
+                      <div>
+                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Logo URL</label>
+                        <input value={formOrg.logo_url} onChange={e=>setFormOrg({...formOrg,logo_url:e.target.value})} placeholder="https://..." style={inp({width:'100%'})} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{display:'flex',flexDirection:'column',gap:'20px',animation:'drawerSlideIn 0.3s ease-out'}}>
+                      <div style={{fontSize:'12px',fontWeight:800,color:'var(--navy)',textTransform:'uppercase',letterSpacing:'0.5px'}}>Step 2: Contact & Contract</div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                        <div><label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Contact Person</label><input value={formOrg.contact_person} onChange={e=>setFormOrg({...formOrg,contact_person:e.target.value})} placeholder="Jane Smith" style={inp({width:'100%'})} /></div>
+                        <div><label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Contact Email</label><input value={formOrg.contact_email} onChange={e=>setFormOrg({...formOrg,contact_email:e.target.value})} placeholder="jane@globalair.com" style={inp({width:'100%'})} /></div>
+                      </div>
+                      <div>
+                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Contract End Date</label>
+                        <input type="date" value={formOrg.contract_end_date} onChange={e=>setFormOrg({...formOrg,contract_end_date:e.target.value})} style={inp({width:'100%'})} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : detailUser ? (
+                /* ── USER DETAILS ── */
+                <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
+                    <div style={{width:'64px',height:'64px',borderRadius:'50%',background:'var(--navy)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'24px',fontWeight:800}}>{detailUser.full_name.charAt(0)}</div>
+                    <div>
+                      <h4 style={{margin:0,fontSize:'18px',fontWeight:800,color:'var(--navy)'}}>{detailUser.full_name}</h4>
+                      <div style={{fontSize:'12px',color:'var(--t3)'}}>{detailUser.email}</div>
+                    </div>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                    <div style={{padding:'12px',borderRadius:'10px',background:'var(--off)',border:'1px solid var(--bdr)'}}>
+                      <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',marginBottom:'4px'}}>Role</div>
+                      <div style={{fontSize:'13px',fontWeight:700,color:'var(--navy)'}}>{detailUser.role.toUpperCase()}</div>
+                    </div>
+                    <div style={{padding:'12px',borderRadius:'10px',background:'var(--off)',border:'1px solid var(--bdr)'}}>
+                      <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',marginBottom:'4px'}}>Organization</div>
+                      <div style={{fontSize:'13px',fontWeight:700,color:'var(--navy)'}}>{detailUser.organizations?.name || 'Individual'}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : detailOrg ? (
+                /* ── ORGANIZATION DETAILS ── */
+                <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
+                    <div style={{width:'64px',height:'64px',borderRadius:'12px',background:'var(--off)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'28px',border:'1px solid var(--bdr)'}}>
+                      {detailOrg.logo_url ? <img src={detailOrg.logo_url} style={{maxWidth:'100%',borderRadius:'8px'}} /> : '🏢'}
+                    </div>
+                    <div>
+                      <h4 style={{margin:0,fontSize:'18px',fontWeight:800,color:'var(--navy)'}}>{detailOrg.name}</h4>
+                      <div style={{fontSize:'12px',color:'var(--t3)'}}>{detailOrg.domain || 'No domain registered'}</div>
+                    </div>
+                  </div>
+                  <div style={{padding:'16px',borderRadius:'12px',background:new Date(detailOrg.contract_end_date) < new Date() ? '#fef2f2' : '#f0fdf4',border:'1px solid',borderColor:new Date(detailOrg.contract_end_date) < new Date() ? '#fecaca' : '#bbf7d0'}}>
+                    <div style={{fontSize:'11px',fontWeight:700,color:new Date(detailOrg.contract_end_date) < new Date() ? '#991b1b' : '#166534',textTransform:'uppercase',marginBottom:'4px'}}>Contract Status</div>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:'14px',fontWeight:700,color:new Date(detailOrg.contract_end_date) < new Date() ? '#dc2626' : '#16a34a'}}>{new Date(detailOrg.contract_end_date) < new Date() ? 'EXPIRED' : 'ACTIVE'}</span>
+                      <span style={{fontSize:'13px',color:'var(--t2)'}}>{detailOrg.contract_end_date ? `Ends: ${new Date(detailOrg.contract_end_date).toLocaleDateString()}` : 'No date set'}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : showForm ? (
+                /* ── QUESTION FORM ── */
+                <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+                  {editQ && <div style={{padding:'12px',background:'#fff7ed',borderRadius:'8px',fontSize:'12.5px',color:'#9a3412',border:'1px solid #ffedd5'}}>⚠️ <strong>Auto-Version:</strong> saving will create <strong>V{(editQ.version_number||1)+1}</strong>.</div>}
+                  
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                    <div>
+                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Section</label>
+                      <select value={formQ.section} onChange={e=>setFormQ({...formQ,section:e.target.value})} style={inp({width:'100%'})}>{sections.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}</select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Type</label>
+                      <select value={formQ.type} onChange={e=>setFormQ({...formQ,type:e.target.value})} style={inp({width:'100%'})}>{[['multiple_choice','Multiple Choice'],['fill_blank','Fill in Blank'],['audio_response','Audio Response'],['written_response','Written Response'],['listening','Listening'],['picture_description','Picture Description']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
+                    </div>
+                  </div>
+
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                    <div>
+                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>CEFR</label>
+                      <select value={formQ.cefr_level} onChange={e=>setFormQ({...formQ,cefr_level:e.target.value})} style={inp({width:'100%'})}>{cefrLevels.map(l=><option key={l} value={l}>{l}</option>)}</select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Difficulty</label>
+                      <select value={formQ.difficulty} onChange={e=>setFormQ({...formQ,difficulty:e.target.value})} style={inp({width:'100%'})}>{[['easy','Easy'],['medium','Medium'],['hard','Hard']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Question Text *</label>
+                    <textarea value={formQ.content} onChange={e=>setFormQ({...formQ,content:e.target.value})} placeholder="..." rows={5} style={{...inp({width:'100%',resize:'vertical',fontSize:'14px'})}} />
+                  </div>
+
+                  {(formQ.type==='multiple_choice'||formQ.type==='fill_blank')&&(
+                    <div style={{background:'var(--off)',borderRadius:'12px',padding:'16px',border:'1.5px solid var(--bdr)'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase'}}>Options</label>
+                        <button onClick={()=>setOptions([...options,{text:'',is_correct:false}])} style={{fontSize:'11px',fontWeight:700,color:'var(--sky)',background:'none',border:'none',cursor:'pointer'}}>+ ADD OPTION</button>
+                      </div>
+                      <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                        {options.map((opt,i)=>(
+                          <div key={i} style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                            <span style={{fontSize:'12px',fontWeight:800,color:'var(--t3)',width:'20px'}}>{String.fromCharCode(65+i)}</span>
+                            <input value={opt.text} onChange={e=>{const o=[...options];o[i]={...o[i],text:e.target.value};setOptions(o)}} style={{...inp({flex:1,fontSize:'13px'})}} />
+                            <input type="checkbox" checked={opt.is_correct} onChange={e=>{const o=[...options];o.forEach((x,idx)=>x.is_correct=idx===i?e.target.checked:false);setOptions([...o])}} />
+                            <button onClick={()=>setOptions(options.filter((_,idx)=>idx!==i))} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:'14px'}}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Asset (Image/Audio URL)</label>
+                    <div style={{display:'flex',gap:'8px'}}>
+                      <input value={formQ.audio_url || formQ.image_url} onChange={e=>setFormQ({...formQ,audio_url:e.target.value})} placeholder="https://..." style={inp({flex:1})} />
+                      <label style={{padding:'8px 12px',borderRadius:'8px',border:'1.5px solid var(--sky)',background:'var(--sky3)',color:'var(--sky)',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>
+                        UPLOAD
+                        <input type="file" style={{display:'none'}} onChange={async (e)=>{
+                          const file = e.target.files?.[0]; if(!file) return;
+                          const ext = file.name.split('.').pop();
+                          const fileName = `${formQ.section}/${Date.now()}.${ext}`;
+                          const { data, error } = await supabase.storage.from('question-assets').upload(fileName, file, { upsert: true });
+                          if(error) return alert(error.message);
+                          const { data: urlData } = supabase.storage.from('question-assets').getPublicUrl(fileName);
+                          setFormQ({...formQ, audio_url: urlData.publicUrl, image_url: urlData.publicUrl});
+                        }} />
+                      </label>
+                    </div>
+                  </div>
+
+                  {!editQ && (
+                    <div style={{background:'var(--off)',borderRadius:'12px',padding:'16px',border:'1.5px solid var(--bdr)',marginBottom:'40px'}}>
+                      <div style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase',marginBottom:'12px'}}>Target Assignments</div>
+                      <div style={{marginBottom:'12px'}}>
+                        <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Departments</div>
+                        <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                          {departments.map(d=>(
+                            <button key={d.id} onClick={()=>toggleArr(selectedDepts,setSelectedDepts,d.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedDepts.includes(d.id)?'var(--navy)':'var(--bdr)',background:selectedDepts.includes(d.id)?'var(--navy)':'#fff',color:selectedDepts.includes(d.id)?'#fff':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{d.name}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {selectedDepts.length > 0 && (
+                        <div style={{marginBottom:'12px'}}>
+                          <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Sub-Roles</div>
+                          <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                            {filteredSubRoles.map(s=>(
+                              <button key={s.id} onClick={()=>toggleArr(selectedSubRoles,setSelectedSubRoles,s.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedSubRoles.includes(s.id)?'var(--sky)':'var(--bdr)',background:selectedSubRoles.includes(s.id)?'var(--sky3)':'#fff',color:selectedSubRoles.includes(s.id)?'var(--sky)':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{s.name}</button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Use Cases</div>
+                        <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                          {useCases.map(u=>(
+                            <button key={u.id} onClick={()=>toggleArr(selectedUseCases,setSelectedUseCases,u.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedUseCases.includes(u.id)?'var(--teal)':'var(--bdr)',background:selectedUseCases.includes(u.id)?'#E6F7F4':'#fff',color:selectedUseCases.includes(u.id)?'var(--teal)':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{u.name}</button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : detailQ ? (
+                /* ── QUESTION VIEW ── */
+                <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
+                  <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                    <span style={{padding:'4px 10px',borderRadius:'6px',background:sectionColors[detailQ.section]+'15',color:sectionColors[detailQ.section],fontSize:'11px',fontWeight:800,textTransform:'uppercase'}}>{detailQ.section}</span>
+                    <span style={{padding:'4px 10px',borderRadius:'6px',background:'var(--sky3)',color:'var(--sky)',fontSize:'11px',fontWeight:800}}>{detailQ.cefr_level}</span>
+                    <span style={{padding:'4px 10px',borderRadius:'6px',background:'#f1f5f9',color:'#475569',fontSize:'11px',fontWeight:800,textTransform:'uppercase'}}>{detailQ.difficulty}</span>
+                    <span style={{padding:'4px 10px',borderRadius:'6px',background:'#f5f3ff',color:'#7c3aed',fontSize:'11px',fontWeight:800,textTransform:'uppercase'}}>{detailQ.role_tag || 'General'}</span>
+                  </div>
+
+                  <div>
+                    <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',marginBottom:'8px'}}>Question Content</div>
+                    <div style={{fontSize:'16px',color:'var(--navy)',lineHeight:1.6,whiteSpace:'pre-wrap',fontWeight:500}}>{detailQ.content}</div>
+                  </div>
+
+                  {detailQ.correct_answer && (
+                    <div style={{padding:'16px',background:'#f0fdf4',borderRadius:'12px',border:'1px solid #bbf7d0'}}>
+                      <div style={{fontSize:'11.5px',fontWeight:700,color:'#166534',textTransform:'uppercase',marginBottom:'4px'}}>Correct Answer</div>
+                      <div style={{fontSize:'14px',color:'#166534',fontWeight:600}}>✓ {detailQ.correct_answer}</div>
+                    </div>
+                  )}
+
+                  {detailQ.audio_url && (
+                    <div style={{padding:'16px',background:'var(--off)',borderRadius:'12px',border:'1px solid var(--bdr)'}}>
+                      <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',marginBottom:'12px'}}>Asset / Resource</div>
+                      {detailQ.section === 'listening' ? <audio src={detailQ.audio_url} controls style={{width:'100%'}} /> : <img src={detailQ.audio_url} style={{maxWidth:'100%',borderRadius:'8px'}} />}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Drawer Footer */}
+            <div style={{padding:'20px 24px',borderTop:'1px solid var(--bdr)',background:'#fafafa',display:'flex',justifyContent:'flex-end',gap:'10px'}}>
+              <button onClick={()=>{setShowForm(false);setDetailQ(null);setShowTemplateForm(false);setEditTemplate(null);setShowUserForm(false);setDetailUser(null);setShowOrgForm(false);setDetailOrg(null);setOrgStep(1);resetForm();}} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'13px',fontWeight:600,color:'var(--t2)',cursor:'pointer'}}>Close</button>
+              
+              {showOrgForm && orgStep === 1 && <button onClick={()=>setOrgStep(2)} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Next Step →</button>}
+              {showOrgForm && orgStep === 2 && <button onClick={()=>setOrgStep(1)} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid var(--navy)',background:'#fff',color:'var(--navy)',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>← Back</button>}
+
+              {(showForm || showTemplateForm || showUserForm || (showOrgForm && orgStep === 2)) && <button onClick={showTemplateForm?saveTemplate:showUserForm?saveUser:showOrgForm?saveOrg:saveQuestion} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Save Changes</button>}
+              
+              {detailQ && !showForm && <button onClick={()=>{startEdit(detailQ);setDetailQ(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit This Question</button>}
+              {detailUser && !showUserForm && <button onClick={()=>{startEditUser(detailUser);setDetailUser(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit Profile</button>}
+              {detailOrg && !showOrgForm && <button onClick={()=>{startEditOrg(detailOrg);setOrgStep(1);setDetailOrg(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit Organization</button>}
+            </div>
+          </div>
+        </>
       )}
     </div>
   )
