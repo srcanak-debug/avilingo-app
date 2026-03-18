@@ -142,6 +142,13 @@ export default function ExamSectionPage() {
       const started = ed.started_at ? new Date(ed.started_at).getTime() : Date.now()
       setTimeLeft(Math.max(0, totalMins * 60 - Math.floor((Date.now() - started) / 1000)))
 
+      const { data: existingAns } = await supabase.from('exam_answers').select('question_id, answer').eq('exam_id', examId).eq('section', section)
+      if (existingAns && existingAns.length > 0) {
+        const ansMap: Record<string,string> = {}
+        existingAns.forEach((ea: any) => ansMap[ea.question_id] = ea.answer)
+        setAnswers(ansMap)
+      }
+
       const role = t.role_profile || 'general'
       const all = (ROLE_ORDER[role] || ROLE_ORDER.general).filter((s: string) => (t[`${s}_count`] || 0) > 0)
       const idx = all.indexOf(section)

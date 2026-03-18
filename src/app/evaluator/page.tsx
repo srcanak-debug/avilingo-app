@@ -85,17 +85,17 @@ export default function EvaluatorQueue() {
       .not('answer', 'is', null)
       .neq('answer', '')
       .order('created_at', { ascending: true })
+      .limit(100)
 
-    const examIds = Array.from(new Set(answers?.map(a => a.exam_id) || []))
+    const candidateIds = Array.from(new Set(answers?.map(a => a.exams?.candidate_id).filter(Boolean) || []))
+    const { data: candidates } = await supabase
+      .from('users')
+      .select('id,full_name,email,organizations(name)')
+      .in('id', candidateIds)
+
     const candidateMap: Record<string,any> = {}
-    for (const eid of examIds) {
-      const exam = answers?.find(a => a.exam_id === eid)?.exams
-      if (exam?.candidate_id) {
-        const { data: cand } = await supabase.from('users').select('full_name,email,organizations(name)').eq('id', exam.candidate_id).single()
-        candidateMap[eid] = cand
-      }
-    }
-    answers?.forEach(a => { if (a.exams) a.exams.users = candidateMap[a.exam_id] })
+    candidates?.forEach(c => { candidateMap[c.id] = c })
+    answers?.forEach(a => { if (a.exams) a.exams.users = candidateMap[a.exams.candidate_id] })
 
     // Check graded (answer-level or section-level fallback)
     const { data: graded } = await supabase.from('grades').select('exam_id,section,answer_id').eq('evaluator_id', evaluator.id)

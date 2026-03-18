@@ -27,6 +27,10 @@ export default function UserManagement() {
   const [inviteForm, setInviteForm] = useState({ email:'', full_name:'', role:'candidate', org_id:'' })
   const [orgForm, setOrgForm] = useState({ name:'', contact_email:'', subscription_type:'pay-as-you-go', credit_balance:0 })
   const [stats, setStats] = useState<Record<string,number>>({})
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const [total, setTotal] = useState(0)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => { checkAuth() }, [])
 
@@ -35,20 +39,40 @@ export default function UserManagement() {
     if (!user) { router.push('/login'); return }
     const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
     if (data?.role !== 'super_admin') { router.push('/login'); return }
-    loadUsers()
+    // loadUsers() removed for manual load
     loadOrgs()
+    loadStats() // Separate stats load
   }
 
-  async function loadUsers() {
-    setLoading(true)
-    const { data } = await supabase
-      .from('users')
-      .select('*,organizations(name)')
-      .order('created_at', { ascending: false })
-    setUsers(data || [])
+  async function loadStats() {
     const counts: Record<string,number> = {}
-    data?.forEach(u => { counts[u.role] = (counts[u.role]||0) + 1 })
+    await Promise.all(ROLES.map(async r => {
+      const { count } = await supabase.from('users').select('id', {count:'exact', head:true}).eq('role', r)
+      counts[r] = count || 0
+    }))
     setStats(counts)
+  }
+
+  async function loadUsers(p = page) {
+    setLoading(true)
+    setLoaded(true)
+    let query = supabase
+      .from('users')
+      .select('*,organizations(name)', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(p * pageSize, (p + 1) * pageSize - 1)
+
+    if (search) {
+      query = query.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`)
+    }
+    if (roleFilter !== 'all') {
+      query = query.eq('role', roleFilter)
+    }
+
+    const { data, count } = await query
+    setUsers(data || [])
+    setTotal(count || 0)
+    setPage(p)
     setLoading(false)
   }
 
@@ -130,11 +154,7 @@ export default function UserManagement() {
     alert('Exam assigned successfully!')
   }
 
-  const filtered = users.filter(u => {
-    const matchSearch = !search || u.email?.toLowerCase().includes(search.toLowerCase()) || u.full_name?.toLowerCase().includes(search.toLowerCase())
-    const matchRole = roleFilter === 'all' || u.role === roleFilter
-    return matchSearch && matchRole
-  })
+  const totalPages = Math.ceil(total / pageSize)
 
   const inp = (extra={}) => ({padding:'9px 12px',borderRadius:'8px',border:'1.5px solid var(--bdr)',fontSize:'13px',width:'100%',fontFamily:'var(--fb)',...extra} as any)
 
@@ -294,63 +314,84 @@ export default function UserManagement() {
 
         {/* Filters */}
         <div style={{display:'flex',gap:'10px',marginBottom:'16px',alignItems:'center'}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by name or email..." style={{...inp({width:'280px',flex:'none'})}} />
+          <input value={search} onChange={e=>setSearch(e.target.value)} onKeyDown={e=>e.key==='Enter'&&loadUsers(0)} placeholder="Search by name or email..." style={{...inp({width:'280px',flex:'none'})}} />
           <select value={roleFilter} onChange={e=>setRoleFilter(e.target.value)} style={{...inp({width:'160px',flex:'none'})}}>
             <option value="all">All roles</option>
             {ROLES.map(r=><option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
           </select>
-          <span style={{fontSize:'12.5px',color:'var(--t3)'}}>{filtered.length} users</span>
+          <button onClick={()=>loadUsers(0)} style={{padding:'9px 18px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>Search / Load</button>
+          <span style={{fontSize:'12.5px',color:'var(--t3)'}}>{total} users found</span>
         </div>
 
         {/* Users Table */}
         {loading ? (
           <div style={{textAlign:'center',padding:'40px',color:'var(--t3)'}}>Loading users...</div>
-        ) : (
-          <div style={{background:'#fff',borderRadius:'14px',border:'1px solid var(--bdr)',overflow:'hidden'}}>
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead>
-                <tr style={{background:'var(--off)',borderBottom:'1px solid var(--bdr)'}}>
-                  {['User','Role','Organization','Joined','Actions'].map(h=>(
-                    <th key={h} style={{padding:'11px 16px',textAlign:'left',fontSize:'11px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((u,i)=>(
-                  <tr key={u.id} style={{borderBottom:'1px solid var(--bdr)',background:i%2===0?'#fff':'#FAFBFC'}}>
-                    <td style={{padding:'12px 16px'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                        <div style={{width:'34px',height:'34px',borderRadius:'50%',background:ROLE_COLORS[u.role]+'15',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px',fontWeight:700,color:ROLE_COLORS[u.role],flexShrink:0}}>
-                          {(u.full_name||u.email||'?').charAt(0).toUpperCase()}
-                        </div>
-                        <div>
-                          <div style={{fontSize:'13.5px',fontWeight:600,color:'var(--navy)'}}>{u.full_name||'—'}</div>
-                          <div style={{fontSize:'12px',color:'var(--t3)'}}>{u.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{padding:'12px 16px'}}>
-                      <span style={{fontSize:'11.5px',fontWeight:700,padding:'3px 9px',borderRadius:'100px',background:ROLE_COLORS[u.role]+'15',color:ROLE_COLORS[u.role],textTransform:'capitalize'}}>{ROLE_LABELS[u.role]||u.role}</span>
-                    </td>
-                    <td style={{padding:'12px 16px',fontSize:'13px',color:'var(--t2)'}}>{u.organizations?.name||'—'}</td>
-                    <td style={{padding:'12px 16px',fontSize:'12px',color:'var(--t3)'}}>{u.created_at?new Date(u.created_at).toLocaleDateString('en-GB'):'—'}</td>
-                    <td style={{padding:'12px 16px'}}>
-                      <div style={{display:'flex',gap:'6px'}}>
-                        <button onClick={()=>setEditUser({...u})} style={{padding:'4px 10px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11.5px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>Edit</button>
-                        {u.role==='candidate'&&(
-                          <a href={`/admin/users/${u.id}/assign-exam`} style={{padding:'4px 10px',borderRadius:'6px',border:'1.5px solid #BBF7D0',background:'#F0FDF4',fontSize:'11.5px',fontWeight:600,color:'#14532D',textDecoration:'none',display:'inline-block'}}>Assign Exam</a>
-                        )}
-
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filtered.length === 0 && (
-              <div style={{padding:'40px',textAlign:'center',color:'var(--t3)',fontSize:'13.5px'}}>No users found matching your filters.</div>
-            )}
+        ) : !loaded ? (
+          <div style={{background:'#fff',borderRadius:'14px',padding:'60px',border:'1px solid var(--bdr)',textAlign:'center'}}>
+            <div style={{fontSize:'32px',marginBottom:'12px'}}>👥</div>
+            <h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'6px'}}>User Management</h3>
+            <p style={{fontSize:'13.5px',color:'var(--t3)',marginBottom:'20px'}}>Click the "Search / Load" button to fetch user data.</p>
+            <button onClick={()=>loadUsers(0)} style={{padding:'10px 24px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13.5px',fontWeight:700,cursor:'pointer',fontFamily:'var(--fb)'}}>Load Users</button>
           </div>
+        ) : (
+          <>
+            <div style={{background:'#fff',borderRadius:'14px',border:'1px solid var(--bdr)',overflow:'hidden'}}>
+              <table style={{width:'100%',borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{background:'var(--off)',borderBottom:'1px solid var(--bdr)'}}>
+                    {['User','Role','Organization','Joined','Actions'].map(h=>(
+                      <th key={h} style={{padding:'11px 16px',textAlign:'left',fontSize:'11px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u,i)=>(
+                    <tr key={u.id} style={{borderBottom:'1px solid var(--bdr)',background:i%2===0?'#fff':'#FAFBFC'}}>
+                      <td style={{padding:'12px 16px',width:'max-content'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                          <div style={{width:'34px',height:'34px',borderRadius:'50%',background:ROLE_COLORS[u.role]+'15',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px',fontWeight:700,color:ROLE_COLORS[u.role],flexShrink:0}}>
+                            {(u.full_name||u.email||'?').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{fontSize:'13.5px',fontWeight:600,color:'var(--navy)'}}>{u.full_name||'—'}</div>
+                            <div style={{fontSize:'12px',color:'var(--t3)'}}>{u.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{padding:'12px 16px'}}>
+                        <span style={{fontSize:'11.5px',fontWeight:700,padding:'3px 9px',borderRadius:'100px',background:ROLE_COLORS[u.role]+'15',color:ROLE_COLORS[u.role],textTransform:'capitalize'}}>{ROLE_LABELS[u.role]||u.role}</span>
+                      </td>
+                      <td style={{padding:'12px 16px',fontSize:'13px',color:'var(--t2)'}}>{u.organizations?.name||'—'}</td>
+                      <td style={{padding:'12px 16px',fontSize:'12px',color:'var(--t3)'}}>{u.created_at?new Date(u.created_at).toLocaleDateString('en-GB'):'—'}</td>
+                      <td style={{padding:'12px 16px'}}>
+                        <div style={{display:'flex',gap:'6px'}}>
+                          <button onClick={()=>setEditUser({...u})} style={{padding:'4px 10px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11.5px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>Edit</button>
+                          {u.role==='candidate'&&(
+                            <a href={`/admin/users/${u.id}/assign-exam`} style={{padding:'4px 10px',borderRadius:'6px',border:'1.5px solid #BBF7D0',background:'#F0FDF4',fontSize:'11.5px',fontWeight:600,color:'#14532D',textDecoration:'none',display:'inline-block'}}>Assign Exam</a>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {users.length === 0 && (
+                <div style={{padding:'40px',textAlign:'center',color:'var(--t3)',fontSize:'13.5px'}}>No users found matching your filters.</div>
+              )}
+            </div>
+
+            {/* Pagination Controls */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:'18px'}}>
+              <div style={{fontSize:'13px',color:'var(--t3)'}}>
+                Showing <strong>{page * pageSize + 1}</strong>–<strong>{Math.min((page + 1) * pageSize, total)}</strong> of <strong>{total}</strong>
+              </div>
+              <div style={{display:'flex',gap:'8px'}}>
+                <button onClick={()=>loadUsers(page - 1)} disabled={page === 0} style={{padding:'6px 14px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:page===0?'var(--t3)':'var(--navy)',cursor:page===0?'default':'pointer',fontFamily:'var(--fb)'}}>← Previous</button>
+                <div style={{padding:'6px 12px',fontSize:'13px',fontWeight:700,color:'var(--t1)'}}>{page + 1} / {totalPages || 1}</div>
+                <button onClick={()=>loadUsers(page + 1)} disabled={page >= totalPages - 1} style={{padding:'6px 14px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:page>=totalPages-1?'var(--t3)':'var(--navy)',cursor:page>=totalPages-1?'default':'pointer',fontFamily:'var(--fb)'}}>Next →</button>
+              </div>
+            </div>
+          </>
         )}
 
         {/* Organizations section */}

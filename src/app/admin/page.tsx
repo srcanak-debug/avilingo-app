@@ -55,6 +55,7 @@ export default function AdminDashboard() {
   // Question bank
   const [questions, setQuestions] = useState<any[]>([])
   const [qLoading, setQLoading] = useState(false)
+  const [qLoadedOnce, setQLoadedOnce] = useState(false)
   const [qTotal, setQTotal] = useState(0)
   const [qPage, setQPage] = useState(0)
   const [qPageSize, setQPageSize] = useState(25)
@@ -128,7 +129,7 @@ export default function AdminDashboard() {
   })
 
   useEffect(() => { checkAuth(); loadStats(); loadTaxonomy() }, [])
-  useEffect(() => { if (activeSection === 'questions') { setQPage(0); runQuery(0) } }, [activeSection])
+  // useEffect for questions removed to enforce manual load via UI
   useEffect(() => { if (activeSection === 'templates') loadTemplates() }, [activeSection])
 
   async function checkAuth() {
@@ -164,7 +165,9 @@ export default function AdminDashboard() {
 
   // ── QUESTION QUERY ENGINE ──
   async function runQuery(page = qPage, overrides: any = {}) {
+    console.log('DEBUG: runQuery triggered', { page, overrides })
     setQLoading(true)
+    setQLoadedOnce(true)
     const section = overrides.section ?? qSection
     const cefr = overrides.cefr ?? qCefr
     const difficulty = overrides.difficulty ?? qDifficulty
@@ -814,6 +817,13 @@ export default function AdminDashboard() {
                 {/* TABLE */}
                 {qLoading ? (
                   <div style={{textAlign:'center',padding:'32px',color:'var(--t3)'}}>Loading...</div>
+                ) : !qLoadedOnce ? (
+                  <div style={{background:'#fff',borderRadius:'12px',padding:'60px',border:'1px solid var(--bdr)',textAlign:'center'}}>
+                    <div style={{fontSize:'32px',marginBottom:'12px'}}>🔍</div>
+                    <h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'var(--navy)',marginBottom:'6px'}}>Question Bank</h3>
+                    <p style={{fontSize:'13.5px',color:'var(--t3)',marginBottom:'20px'}}>Large dataset. Please click "Apply Filters" to load questions.</p>
+                    <button onClick={applyFilters} style={{padding:'10px 24px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13.5px',fontWeight:700,cursor:'pointer',fontFamily:'var(--fb)'}}>Load Questions</button>
+                  </div>
                 ) : questions.length===0 ? (
                   <div style={{background:'#fff',borderRadius:'12px',padding:'40px',border:'1px solid var(--bdr)',textAlign:'center'}}>
                     <div style={{fontSize:'28px',marginBottom:'8px'}}>📝</div>

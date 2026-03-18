@@ -21,6 +21,7 @@ export default function ReportsPage() {
   const [cefrDist, setCefrDist] = useState<Record<string,number>>({})
   const [sectionDist, setSectionDist] = useState<Record<string,number>>({})
   const [dateFilter, setDateFilter] = useState('30')
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { if (!loading) loadReportData() }, [dateFilter])
@@ -35,6 +36,7 @@ export default function ReportsPage() {
   }
 
   async function loadReportData() {
+    setIsRefreshing(true)
     const since = new Date(Date.now() - parseInt(dateFilter) * 24*60*60*1000).toISOString()
 
     const [
@@ -46,6 +48,12 @@ export default function ReportsPage() {
       { data: examData },
       { data: orgData },
       { data: questionData },
+      // Section counts
+      { count: countGrammar },
+      { count: countReading },
+      { count: countWriting },
+      { count: countSpeaking },
+      { count: countListening },
     ] = await Promise.all([
       supabase.from('users').select('id',{count:'exact',head:true}),
       supabase.from('exams').select('id',{count:'exact',head:true}),
@@ -55,6 +63,12 @@ export default function ReportsPage() {
       supabase.from('exams').select('*,exam_templates(name,passing_cefr,role_profile),users:candidate_id(full_name,email,organizations(name))').gte('created_at',since).order('created_at',{ascending:false}).limit(50),
       supabase.from('organizations').select('*').order('name'),
       supabase.from('questions').select('id,section,cefr_level,usage_count,question_analytics(difficulty_index,total_attempts)').eq('is_latest',true).order('usage_count',{ascending:false}).limit(10),
+      // Individual section counts
+      supabase.from('questions').select('id',{count:'exact',head:true}).eq('section','grammar').eq('is_latest',true),
+      supabase.from('questions').select('id',{count:'exact',head:true}).eq('section','reading').eq('is_latest',true),
+      supabase.from('questions').select('id',{count:'exact',head:true}).eq('section','writing').eq('is_latest',true),
+      supabase.from('questions').select('id',{count:'exact',head:true}).eq('section','speaking').eq('is_latest',true),
+      supabase.from('questions').select('id',{count:'exact',head:true}).eq('section','listening').eq('is_latest',true),
     ])
 
     setStats({ totalUsers, totalExams, totalQuestions, totalOrgs, pendingGrades })
@@ -67,13 +81,15 @@ export default function ReportsPage() {
     examData?.filter(e=>e.final_cefr_score).forEach(e => { cefr[e.final_cefr_score] = (cefr[e.final_cefr_score]||0)+1 })
     setCefrDist(cefr)
 
-    // Section distribution from questions
-    const sec: Record<string,number> = {}
-    ;['grammar','reading','writing','speaking','listening'].forEach(async s => {
-      const { count } = await supabase.from('questions').select('id',{count:'exact',head:true}).eq('section',s).eq('is_latest',true)
-      sec[s] = count||0
-      setSectionDist({...sec})
+    // Section distribution
+    setSectionDist({
+      grammar: countGrammar || 0,
+      reading: countReading || 0,
+      writing: countWriting || 0,
+      speaking: countSpeaking || 0,
+      listening: countListening || 0,
     })
+    setIsRefreshing(false)
   }
 
   async function exportExamsCSV() {
@@ -136,6 +152,9 @@ export default function ReportsPage() {
             <option value="90">Last 90 days</option>
             <option value="365">Last 12 months</option>
           </select>
+          <button onClick={loadReportData} disabled={isRefreshing} style={{padding:'7px 14px',borderRadius:'7px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',cursor:isRefreshing?'default':'pointer',fontFamily:'var(--fb)'}}>
+            {isRefreshing ? '⌛ Refreshing...' : '🔄 Refresh Data'}
+          </button>
           <button onClick={exportExamsCSV} style={{padding:'7px 14px',borderRadius:'7px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Export Exams</button>
           <button onClick={exportQuestionBankCSV} style={{padding:'7px 14px',borderRadius:'7px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Export Questions</button>
         </div>

@@ -199,7 +199,7 @@ export default function HRPortal() {
     }
 
     const ROLE_DESCRIPTORS: Record<string, Record<string, string>> = {
-      cockpit: {
+      flight_deck: {
         C2: "Exhibits full mastery of aviation English. Can manage complex cockpit communications and non-routine emergencies with absolute precision and linguistic ease.",
         C1: "Highly proficient in flight deck operations. Can handle diverse weather challenges and coordination with ATC spontaneously and fluently.",
         B2: "Effective communicator in standard flight operations. Can maintain safety-critical dialogue and understand most technical advisories.",
@@ -207,7 +207,7 @@ export default function HRPortal() {
         A2: "Limited to pre-formatted radiotelephony. Lacks the fluency required for safe international flight deck operations in complex environments.",
         A1: "Insufficient for flight deck duties. Only basic recognition of aviation terminology."
       },
-      cabin: {
+      cabin_crew: {
         C2: "Consummate professional. Handles passenger needs, safety briefings, and emergency coordination with exceptional clarity and empathy.",
         C1: "Strong communicator. Can resolve passenger conflicts and provide detailed medical or safety assistance fluently.",
         B2: "Solid communication skills. Manages routine cabin duties and safety announcements effectively. Good passenger interaction.",
@@ -231,7 +231,7 @@ export default function HRPortal() {
         A2: "Unsafe for control duties. Communication is too slow and prone to misinterpretation.",
         A1: "No functional control capability."
       },
-      ground: {
+      ground_staff: {
         C2: "Expert in ground operations. Seamlessly coordinates boarding, fueling, and ramp services with diverse international teams.",
         C1: "Very effective communication. Manages passenger boarding and ground handling logistics with high efficiency.",
         B2: "Competent for aviation ground duties. Can handle most passenger inquiries and ramp communications effectively.",

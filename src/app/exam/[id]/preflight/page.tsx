@@ -182,7 +182,7 @@ export default function PreflightPage() {
         if (updErr) console.error('Update Exam Error:', updErr)
       }
       
-      // Determine first section
+      // Determine first incomplete section
       const ROLE_SECTION_ORDER: Record<string, string[]> = {
         general: ['grammar','reading','listening','writing','speaking'],
         flight_deck: ['grammar','reading','listening','writing','speaking'],
@@ -194,11 +194,25 @@ export default function PreflightPage() {
       const template = ed.exam_templates
       const role = template?.role_profile || 'general'
       const sectionOrder = ROLE_SECTION_ORDER[role] || ROLE_SECTION_ORDER.general
-      const firstSection = sectionOrder.find((s: string) => (template?.[`${s}_count`] || 0) > 0) || sectionOrder[0]
+      
+      const { data: ansCountData } = await supabase.from('exam_answers').select('section').eq('exam_id', examId)
+      const countMap: Record<string, number> = {}
+      ansCountData?.forEach(a => { countMap[a.section] = (countMap[a.section] || 0) + 1 })
+      
+      let resumeSection = sectionOrder.find((s: string) => (template?.[`${s}_count`] || 0) > 0) || sectionOrder[0]
+      for (const s of sectionOrder) {
+        const required = template?.[`${s}_count`] || 0
+        if (required > 0) {
+          if ((countMap[s] || 0) < required) {
+            resumeSection = s
+            break
+          }
+        }
+      }
       
       // Brief loading pause for UX
       await new Promise(r => setTimeout(r, 3500))
-      router.push(`/exam/${examId}/section/${firstSection}`)
+      router.push(`/exam/${examId}/section/${resumeSection}`)
     } catch (err: any) {
       console.error('Fatal startExam error:', err)
       alert('Sistem Yüklenirken Hata Oluştu / Start Exam Error:\n' + (err.message || String(err)))
