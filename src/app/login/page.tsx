@@ -16,13 +16,25 @@ export default function Login() {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false); return }
     
-    const { data: userData } = await supabase
+    const { data: userData, error: userErr } = await supabase
       .from('users')
       .select('role')
       .eq('id', data.user.id)
       .single()
 
-    const role = userData?.role
+    let role = userData?.role
+
+    // Auto-heal missing public.users row (if created manually in Auth)
+    if (!userData && (!userErr || userErr.code === 'PGRST116')) { // PGRST116 = 0 rows
+      await supabase.from('users').insert({
+        id: data.user.id,
+        email: email,
+        full_name: email.split('@')[0],
+        role: 'candidate'
+      })
+      role = 'candidate'
+    }
+
     if (role === 'super_admin') router.push('/admin')
     else if (role === 'hr_manager') router.push('/hr')
     else if (role === 'instructor') router.push('/instructor')
