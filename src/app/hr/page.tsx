@@ -39,12 +39,30 @@ export default function HRPortal() {
   async function checkAuth() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
-    const { data: userData } = await supabase
+    let { data: userData } = await supabase
       .from('users')
       .select('*,organizations(*)')
       .eq('id', user.id)
       .single()
     if (!userData || !['hr_manager','super_admin'].includes(userData.role)) { router.push('/login'); return }
+    
+    // Auto-fix missing org_id for admins
+    if (!userData.org_id) {
+      const { data: orgsq } = await supabase.from('organizations').select('*').limit(1)
+      if (orgsq && orgsq.length > 0) {
+        await supabase.from('users').update({ org_id: orgsq[0].id }).eq('id', userData.id)
+        userData.org_id = orgsq[0].id
+        userData.organizations = orgsq[0]
+      } else {
+        const { data: newOrg } = await supabase.from('organizations').insert({ name: 'Avilingo HQ (Test)', credit_balance: 100 }).select().single()
+        if (newOrg) {
+          await supabase.from('users').update({ org_id: newOrg.id }).eq('id', userData.id)
+          userData.org_id = newOrg.id
+          userData.organizations = newOrg
+        }
+      }
+    }
+
     setHr(userData)
     setOrg(userData.organizations)
     await loadData(userData.org_id)
@@ -66,70 +84,97 @@ export default function HRPortal() {
 
   async function addCandidate() {
     if (!newCandidate.email || !newCandidate.full_name) return
+    if (!org?.id) { alert('Sistemsel Hata: Kurum ID bulunamadı.'); return }
     setSaving(true)
-    // Generate a UUID for the new user
-    const newId = crypto.randomUUID()
-    const { error } = await supabase.from('users').insert({
-      id: newId,
-      email: newCandidate.email,
-      full_name: newCandidate.full_name,
-      role: 'candidate',
-      org_id: org.id
-    })
-    if (error) { alert('Error: ' + error.message); setSaving(false); return }
-    if (newCandidate.template_id) {
-      await supabase.from('exams').insert({
-        candidate_id: newId,
-        template_id: newCandidate.template_id,
-        org_id: org.id,
-        status: 'pending'
+    try {
+      const newId = crypto.randomUUID()
+      const { error } = await supabase.from('users').insert({
+        id: newId,
+        email: newCandidate.email,
+        full_name: newCandidate.full_name,
+        role: 'candidate',
+        org_id: org.id
       })
-      if ((org.credit_balance||0) > 0) {
-        await supabase.from('organizations').update({ credit_balance: org.credit_balance - 1 }).eq('id', org.id)
-        setOrg((o: any) => ({ ...o, credit_balance: o.credit_balance - 1 }))
+      if (error) throw error
+
+      if (newCandidate.template_id) {
+        const { error: exErr } = await supabase.from('exams').insert({
+          candidate_id: newId,
+          template_id: newCandidate.template_id,
+          org_id: org.id,
+          status: 'pending'
+        })
+        if (exErr) throw exErr
+
+        if ((org.credit_balance||0) > 0) {
+          await supabase.from('organizations').update({ credit_balance: org.credit_balance - 1 }).eq('id', org.id)
+          setOrg((o: any) => ({ ...o, credit_balance: o.credit_balance - 1 }))
+        }
       }
+      setShowAddCandidate(false)
+      setNewCandidate({ email:'', full_name:'', template_id:'' })
+      loadData(org.id)
+    } catch (err: any) {
+      alert('İşlem başarısız (Supabase Hatası): ' + err.message)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-    setShowAddCandidate(false)
-    setNewCandidate({ email:'', full_name:'', template_id:'' })
-    loadData(org.id)
   }
 
   async function assignExamToCandidate(candidateId: string) {
     if (!selectedTemplate) return
     setSaving(true)
-    await supabase.from('exams').insert({
-      candidate_id: candidateId,
-      template_id: selectedTemplate,
-      org_id: org.id,
-      status: 'pending'
-    })
-    if (org.credit_balance > 0) {
-      await supabase.from('organizations').update({ credit_balance: org.credit_balance - 1 }).eq('id', org.id)
-      setOrg((o: any) => ({ ...o, credit_balance: o.credit_balance - 1 }))
+    try {
+      const { error } = await supabase.from('exams').insert({
+        candidate_id: candidateId,
+        template_id: selectedTemplate,
+        org_id: org.id,
+        status: 'pending'
+      })
+      if (error) throw error
+
+      if ((org.credit_balance||0) > 0) {
+        await supabase.from('organizations').update({ credit_balance: org.credit_balance - 1 }).eq('id', org.id)
+        setOrg((o: any) => ({ ...o, credit_balance: o.credit_balance - 1 }))
+      }
+      setAssigningExam(null)
+      setSelectedTemplate('')
+      loadData(org.id)
+    } catch (err: any) {
+      alert('Sınav atama başarısız: ' + err.message)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-    setAssigningExam(null)
-    setSelectedTemplate('')
-    loadData(org.id)
   }
 
   async function purchaseCredits() {
+    if (!org?.id) { alert('Sistemsel Hata: Kurum ID bulunamadı.'); return }
     setSaving(true)
-    await supabase.from('credits').insert({ org_id: org.id, amount: creditAmount, used: 0, expires_at: new Date(Date.now() + 365*24*60*60*1000).toISOString() })
-    await supabase.from('organizations').update({ credit_balance: (org.credit_balance||0) + creditAmount }).eq('id', org.id)
-    const { data: invoice } = await supabase.from('invoices').insert({
-      org_id: org.id,
-      amount: creditAmount * 25,
-      vat_amount: creditAmount * 25 * 0.20,
-      status: 'draft',
-      due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString()
-    }).select().single()
-    setOrg((o: any) => ({ ...o, credit_balance: (o.credit_balance||0) + creditAmount }))
-    setSaving(false)
-    setShowPurchaseCredits(false)
-    loadData(org.id)
-    alert(`✅ ${creditAmount} credits added! Invoice #${invoice?.id?.substring(0,8).toUpperCase()} created for €${(creditAmount*25*1.20).toFixed(2)} (inc. 20% KDV)`)
+    try {
+      const { error: cErr } = await supabase.from('credits').insert({ org_id: org.id, amount: creditAmount, used: 0, expires_at: new Date(Date.now() + 365*24*60*60*1000).toISOString() })
+      if (cErr) throw cErr
+
+      const { error: oErr } = await supabase.from('organizations').update({ credit_balance: (org.credit_balance||0) + creditAmount }).eq('id', org.id)
+      if (oErr) throw oErr
+
+      const { data: invoice, error: iErr } = await supabase.from('invoices').insert({
+        org_id: org.id,
+        amount: creditAmount * 25,
+        vat_amount: creditAmount * 25 * 0.20,
+        status: 'draft',
+        due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString()
+      }).select().single()
+      if (iErr) throw iErr
+
+      setOrg((o: any) => ({ ...o, credit_balance: (o.credit_balance||0) + creditAmount }))
+      setShowPurchaseCredits(false)
+      loadData(org.id)
+      alert(`✅ ${creditAmount} credits added! Invoice #${invoice?.id?.substring(0,8).toUpperCase()} created for €${(creditAmount*25*1.20).toFixed(2)} (inc. 20% KDV)`)
+    } catch (err: any) {
+      alert('Kredi satın alma başarısız: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function downloadRoleFitReport(examId: string) {
