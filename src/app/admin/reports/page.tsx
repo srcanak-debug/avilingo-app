@@ -304,9 +304,12 @@ export default function ReportsPage() {
                     </td>
                     <td style={{padding:'11px 16px',fontSize:'12px',color:'var(--t3)'}}>{new Date(e.created_at).toLocaleDateString('en-GB')}</td>
                     <td style={{padding:'11px 16px'}}>
-                      {e.status==='certified'&&(
-                        <a href={`/exam/${e.id}/certificate`} style={{fontSize:'11.5px',fontWeight:600,padding:'4px 10px',borderRadius:'6px',border:'1.5px solid #BBF7D0',background:'#F0FDF4',color:'#14532D',textDecoration:'none'}}>Certificate</a>
-                      )}
+                      <div style={{display:'flex',gap:'6px'}}>
+                        <a href={`/admin/review/${e.id}`} style={{fontSize:'11.5px',fontWeight:600,padding:'4px 10px',borderRadius:'6px',border:'1.5px solid #BAE6FD',background:'#F0F9FF',color:'#0369A1',textDecoration:'none'}}>Review</a>
+                        {e.status==='certified'&&(
+                          <a href={`/exam/${e.id}/certificate`} style={{fontSize:'11.5px',fontWeight:600,padding:'4px 10px',borderRadius:'6px',border:'1.5px solid #BBF7D0',background:'#F0FDF4',color:'#14532D',textDecoration:'none'}}>Cert</a>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

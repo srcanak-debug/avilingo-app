@@ -626,6 +626,7 @@ export default function HRPortal() {
                     </td>
                     <td style={{padding:'11px 16px'}}>
                       <div style={{display:'flex',gap:'6px'}}>
+                        {e.status==='certified'&&<a href={`/admin/review/${e.id}`} style={{padding:'4px 10px',borderRadius:'6px',border:'1px solid rgba(245,158,11,0.3)',background:'rgba(245,158,11,0.1)',color:'#D97706',fontSize:'11.5px',fontWeight:600,textDecoration:'none'}}>Review</a>}
                         {e.status==='certified'&&<button onClick={()=>downloadRoleFitReport(e.id)} style={{padding:'4px 10px',borderRadius:'6px',border:'1px solid rgba(26,209,138,0.3)',background:'rgba(26,209,138,0.1)',color:'#1AD18A',fontSize:'11.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Report</button>}
                         {e.status==='certified'&&<a href={`/exam/${e.id}/certificate`} style={{padding:'4px 10px',borderRadius:'6px',border:'1px solid rgba(58,142,208,0.3)',background:'rgba(58,142,208,0.1)',color:'#5AAEDF',fontSize:'11.5px',fontWeight:600,textDecoration:'none'}}>Certificate</a>}
                       </div>

@@ -182,18 +182,15 @@ export default function AdminDashboard() {
   }, [activeSection])
 
   async function checkAuth() {
-    const aid = localStorage.getItem('adminId')
-    const aname = localStorage.getItem('adminName')
-    const arole = localStorage.getItem('adminRole')
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { router.push('/login'); return }
     
-    if(!aid || arole !== 'super_admin') {
-      router.push('/login')
-      return
-    }
+    const { data } = await supabase.from('users').select('*').eq('id', user.id).single()
+    if (!data || data.role !== 'super_admin') { router.push('/login'); return }
     
-    setAdminId(aid)
-    setAdminName(aname || 'Super Admin')
-    setAdminEmail(localStorage.getItem('adminEmail') || 'admin@domain.com')
+    setAdminId(user.id)
+    setAdminName(data.full_name || 'Super Admin')
+    setAdminEmail(user.email || 'admin@domain.com')
     setLoading(false)
   }
 
