@@ -202,7 +202,7 @@ export default function AdminDashboard() {
     const now = new Date().toISOString()
     const { data: expiredOrgs } = await supabase.from('organizations').select('id, name, contract_end_date').lt('contract_end_date', now).limit(5)
     // For pending evaluations, we check exam_answers for status=pending
-    const { data: pendingGrading } = await supabase.from('exam_answers').select('id, exams(candidate_id, role_profile)').eq('status', 'pending').limit(5)
+    const { data: pendingGrading } = await supabase.from('exam_answers').select('id, exams!inner(candidate_id, role_profile)').eq('exams.status', 'grading').limit(5)
     
     const tasks: any[] = []
     if (expiredOrgs) {

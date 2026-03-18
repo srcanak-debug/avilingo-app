@@ -13,3 +13,6 @@ ADD COLUMN IF NOT EXISTS country text;
 
 -- Optional: Add index for domain searching
 CREATE INDEX IF NOT EXISTS idx_organizations_domain ON organizations(domain);
+
+-- Force PostgREST to reload schema cache
+NOTIFY pgrst, 'reload schema';
