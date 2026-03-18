@@ -93,6 +93,7 @@ export default function AdminDashboard() {
   const [editQ, setEditQ] = useState<any>(null)
   const [detailQ, setDetailQ] = useState<any>(null)
   const [saving, setSaving] = useState(false)
+  const [qStep, setQStep] = useState(1)
   const [formQ, setFormQ] = useState({
     section:'grammar', type:'multiple_choice', content:'',
     correct_answer:'', cefr_level:'B1', difficulty:'medium',
@@ -409,7 +410,7 @@ export default function AdminDashboard() {
   }
 
   function resetForm() {
-    setEditQ(null); setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general' }); setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([]);
+    setEditQ(null); setQStep(1); setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general' });         setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([]);
     setEditTemplate(null); setNewTemplate({ name:'', role_profile:'general', grammar_count:15, reading_count:5, writing_count:3, speaking_count:4, listening_count:8, weight_grammar:10, weight_reading:20, weight_writing:20, weight_speaking:40, weight_listening:10, time_limit_mins:90, writing_timer_mins:3.5, speaking_attempts:3, listening_single_play:true, passing_cefr:'B2', proctoring_enabled:true, attempts_allowed:1, org_id:null });
     setEditUser(null); setFormUser({ full_name:'', email:'', role:'candidate', org_id:'', phone:'', country:'' });
     setEditOrg(null); setFormOrg({ name:'', domain:'', logo_url:'', contact_person:'', contact_email:'', contract_end_date:'' });
@@ -1457,7 +1458,7 @@ export default function AdminDashboard() {
                 /* ── USER DETAILS ── */
                 <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
-                    <div style={{width:'64px',height:'64px',borderRadius:'50%',background:'var(--navy)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'24px',fontWeight:800}}>{detailUser.full_name.charAt(0)}</div>
+                    <div style={{width:'64px',height:'64px',borderRadius:'50%',background:'var(--navy)',color:'#fff',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'24px',fontWeight:800}}>{detailUser.full_name?.charAt(0)}</div>
                     <div>
                       <h4 style={{margin:0,fontSize:'18px',fontWeight:800,color:'var(--navy)'}}>{detailUser.full_name}</h4>
                       <div style={{fontSize:'12px',color:'var(--t3)'}}>{detailUser.email}</div>
@@ -1466,11 +1467,11 @@ export default function AdminDashboard() {
                   <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
                     <div style={{padding:'12px',borderRadius:'10px',background:'var(--off)',border:'1px solid var(--bdr)'}}>
                       <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',marginBottom:'4px'}}>Role</div>
-                      <div style={{fontSize:'13px',fontWeight:700,color:'var(--navy)'}}>{detailUser.role.toUpperCase()}</div>
+                      <div style={{fontSize:'13px',fontWeight:700,color:'var(--navy)'}}>{detailUser.role?.toUpperCase()}</div>
                     </div>
                     <div style={{padding:'12px',borderRadius:'10px',background:'var(--off)',border:'1px solid var(--bdr)'}}>
                       <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',marginBottom:'4px'}}>Organization</div>
-                      <div style={{fontSize:'13px',fontWeight:700,color:'var(--navy)'}}>{detailUser.organizations?.name || 'Individual'}</div>
+                      <div style={{fontSize:'13px',fontWeight:700,color:'var(--navy)'}}>{orgList.find(o=>o.id===detailUser.org_id)?.name || 'Individual'}</div>
                     </div>
                   </div>
                 </div>
@@ -1495,102 +1496,123 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               ) : showForm ? (
-                /* ── QUESTION FORM ── */
+                /* ── QUESTION FORM (WIZARD) ── */
                 <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
-                  {editQ && <div style={{padding:'12px',background:'#fff7ed',borderRadius:'8px',fontSize:'12.5px',color:'#9a3412',border:'1px solid #ffedd5'}}>⚠️ <strong>Auto-Version:</strong> saving will create <strong>V{(editQ.version_number||1)+1}</strong>.</div>}
-                  
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-                    <div>
-                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Section</label>
-                      <select value={formQ.section} onChange={e=>setFormQ({...formQ,section:e.target.value})} style={inp({width:'100%'})}>{sections.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}</select>
-                    </div>
-                    <div>
-                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Type</label>
-                      <select value={formQ.type} onChange={e=>setFormQ({...formQ,type:e.target.value})} style={inp({width:'100%'})}>{[['multiple_choice','Multiple Choice'],['fill_blank','Fill in Blank'],['audio_response','Audio Response'],['written_response','Written Response'],['listening','Listening'],['picture_description','Picture Description']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
-                    </div>
+                  <div style={{display:'flex',gap:'4px',marginBottom:'12px'}}>
+                    {[1,2,3].map(s=>(
+                      <div key={s} style={{flex:1,height:'4px',borderRadius:'2px',background:qStep>=s?'var(--navy)':'var(--bdr)'}} />
+                    ))}
                   </div>
 
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-                    <div>
-                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>CEFR</label>
-                      <select value={formQ.cefr_level} onChange={e=>setFormQ({...formQ,cefr_level:e.target.value})} style={inp({width:'100%'})}>{cefrLevels.map(l=><option key={l} value={l}>{l}</option>)}</select>
-                    </div>
-                    <div>
-                      <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Difficulty</label>
-                      <select value={formQ.difficulty} onChange={e=>setFormQ({...formQ,difficulty:e.target.value})} style={inp({width:'100%'})}>{[['easy','Easy'],['medium','Medium'],['hard','Hard']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Question Text *</label>
-                    <textarea value={formQ.content} onChange={e=>setFormQ({...formQ,content:e.target.value})} placeholder="..." rows={5} style={{...inp({width:'100%',resize:'vertical',fontSize:'14px'})}} />
-                  </div>
-
-                  {(formQ.type==='multiple_choice'||formQ.type==='fill_blank')&&(
-                    <div style={{background:'var(--off)',borderRadius:'12px',padding:'16px',border:'1.5px solid var(--bdr)'}}>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase'}}>Options</label>
-                        <button onClick={()=>setOptions([...options,{text:'',is_correct:false}])} style={{fontSize:'11px',fontWeight:700,color:'var(--sky)',background:'none',border:'none',cursor:'pointer'}}>+ ADD OPTION</button>
-                      </div>
-                      <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-                        {options.map((opt,i)=>(
-                          <div key={i} style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                            <span style={{fontSize:'12px',fontWeight:800,color:'var(--t3)',width:'20px'}}>{String.fromCharCode(65+i)}</span>
-                            <input value={opt.text} onChange={e=>{const o=[...options];o[i]={...o[i],text:e.target.value};setOptions(o)}} style={{...inp({flex:1,fontSize:'13px'})}} />
-                            <input type="checkbox" checked={opt.is_correct} onChange={e=>{const o=[...options];o.forEach((x,idx)=>x.is_correct=idx===i?e.target.checked:false);setOptions([...o])}} />
-                            <button onClick={()=>setOptions(options.filter((_,idx)=>idx!==i))} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:'14px'}}>✕</button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div>
-                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Asset (Image/Audio URL)</label>
-                    <div style={{display:'flex',gap:'8px'}}>
-                      <input value={formQ.audio_url || formQ.image_url} onChange={e=>setFormQ({...formQ,audio_url:e.target.value})} placeholder="https://..." style={inp({flex:1})} />
-                      <label style={{padding:'8px 12px',borderRadius:'8px',border:'1.5px solid var(--sky)',background:'var(--sky3)',color:'var(--sky)',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>
-                        UPLOAD
-                        <input type="file" style={{display:'none'}} onChange={async (e)=>{
-                          const file = e.target.files?.[0]; if(!file) return;
-                          const ext = file.name.split('.').pop();
-                          const fileName = `${formQ.section}/${Date.now()}.${ext}`;
-                          const { data, error } = await supabase.storage.from('question-assets').upload(fileName, file, { upsert: true });
-                          if(error) return alert(error.message);
-                          const { data: urlData } = supabase.storage.from('question-assets').getPublicUrl(fileName);
-                          setFormQ({...formQ, audio_url: urlData.publicUrl, image_url: urlData.publicUrl});
-                        }} />
-                      </label>
-                    </div>
-                  </div>
-
-                  {!editQ && (
-                    <div style={{background:'var(--off)',borderRadius:'12px',padding:'16px',border:'1.5px solid var(--bdr)',marginBottom:'40px'}}>
-                      <div style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase',marginBottom:'12px'}}>Target Assignments</div>
-                      <div style={{marginBottom:'12px'}}>
-                        <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Departments</div>
-                        <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-                          {departments.map(d=>(
-                            <button key={d.id} onClick={()=>toggleArr(selectedDepts,setSelectedDepts,d.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedDepts.includes(d.id)?'var(--navy)':'var(--bdr)',background:selectedDepts.includes(d.id)?'var(--navy)':'#fff',color:selectedDepts.includes(d.id)?'#fff':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{d.name}</button>
-                          ))}
+                  {qStep === 1 ? (
+                    <div style={{display:'flex',flexDirection:'column',gap:'20px',animation:'drawerSlideIn 0.3s ease-out'}}>
+                      <div style={{fontSize:'12px',fontWeight:800,color:'var(--navy)',textTransform:'uppercase',letterSpacing:'0.5px'}}>Step 1: Configuration</div>
+                      {editQ && <div style={{padding:'12px',background:'#fff7ed',borderRadius:'8px',fontSize:'12.5px',color:'#9a3412',border:'1px solid #ffedd5'}}>⚠️ <strong>Auto-Version:</strong> saving will create <strong>V{(editQ.version_number||1)+1}</strong>.</div>}
+                      
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                        <div>
+                          <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Section</label>
+                          <select value={formQ.section} onChange={e=>setFormQ({...formQ,section:e.target.value})} style={inp({width:'100%'})}>{sections.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}</select>
+                        </div>
+                        <div>
+                          <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Type</label>
+                          <select value={formQ.type} onChange={e=>setFormQ({...formQ,type:e.target.value})} style={inp({width:'100%'})}>{[['multiple_choice','Multiple Choice'],['fill_blank','Fill in Blank'],['audio_response','Audio Response'],['written_response','Written Response'],['listening','Listening'],['picture_description','Picture Description']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
                         </div>
                       </div>
-                      {selectedDepts.length > 0 && (
-                        <div style={{marginBottom:'12px'}}>
-                          <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Sub-Roles</div>
-                          <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-                            {filteredSubRoles.map(s=>(
-                              <button key={s.id} onClick={()=>toggleArr(selectedSubRoles,setSelectedSubRoles,s.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedSubRoles.includes(s.id)?'var(--sky)':'var(--bdr)',background:selectedSubRoles.includes(s.id)?'var(--sky3)':'#fff',color:selectedSubRoles.includes(s.id)?'var(--sky)':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{s.name}</button>
+
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                        <div>
+                          <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>CEFR</label>
+                          <select value={formQ.cefr_level} onChange={e=>setFormQ({...formQ,cefr_level:e.target.value})} style={inp({width:'100%'})}>{cefrLevels.map(l=><option key={l} value={l}>{l}</option>)}</select>
+                        </div>
+                        <div>
+                          <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Difficulty</label>
+                          <select value={formQ.difficulty} onChange={e=>setFormQ({...formQ,difficulty:e.target.value})} style={inp({width:'100%'})}>{[['easy','Easy'],['medium','Medium'],['hard','Hard']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Target Role Tag</label>
+                        <select value={formQ.role_tag} onChange={e=>setFormQ({...formQ,role_tag:e.target.value})} style={inp({width:'100%'})}>
+                          {['general','flight_deck','cabin_crew','atc','maintenance','ground_staff'].map(r=><option key={r} value={r}>{r.replace('_',' ').toUpperCase()}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  ) : qStep === 2 ? (
+                    <div style={{display:'flex',flexDirection:'column',gap:'20px',animation:'drawerSlideIn 0.3s ease-out'}}>
+                      <div>
+                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Question Text *</label>
+                        <textarea value={formQ.content} onChange={e=>setFormQ({...formQ,content:e.target.value})} placeholder="..." rows={5} style={{...inp({width:'100%',resize:'vertical',fontSize:'14px'})}} />
+                      </div>
+
+                      {(formQ.type==='multiple_choice'||formQ.type==='fill_blank')&&(
+                        <div style={{background:'var(--off)',borderRadius:'12px',padding:'16px',border:'1.5px solid var(--bdr)'}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                            <label style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase'}}>Options</label>
+                            <button onClick={()=>setOptions([...options,{text:'',is_correct:false}])} style={{fontSize:'11px',fontWeight:700,color:'var(--sky)',background:'none',border:'none',cursor:'pointer'}}>+ ADD OPTION</button>
+                          </div>
+                          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                            {options.map((opt,i)=>(
+                              <div key={i} style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                                <span style={{fontSize:'12px',fontWeight:800,color:'var(--t3)',width:'20px'}}>{String.fromCharCode(65+i)}</span>
+                                <input value={opt.text} onChange={e=>{const o=[...options];o[i]={...o[i],text:e.target.value};setOptions(o)}} style={{...inp({flex:1,fontSize:'13px'})}} />
+                                <input type="checkbox" checked={opt.is_correct} onChange={e=>{const o=[...options];o.forEach((x,idx)=>x.is_correct=idx===i?e.target.checked:false);setOptions([...o])}} />
+                                <button onClick={()=>setOptions(options.filter((_,idx)=>idx!==i))} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:'14px'}}>✕</button>
+                              </div>
                             ))}
                           </div>
                         </div>
                       )}
+
                       <div>
-                        <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Use Cases</div>
-                        <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-                          {useCases.map(u=>(
-                            <button key={u.id} onClick={()=>toggleArr(selectedUseCases,setSelectedUseCases,u.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedUseCases.includes(u.id)?'var(--teal)':'var(--bdr)',background:selectedUseCases.includes(u.id)?'#E6F7F4':'#fff',color:selectedUseCases.includes(u.id)?'var(--teal)':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{u.name}</button>
-                          ))}
+                        <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Asset (Image/Audio URL)</label>
+                        <div style={{display:'flex',gap:'8px'}}>
+                          <input value={formQ.audio_url || formQ.image_url} onChange={e=>setFormQ({...formQ,audio_url:e.target.value})} placeholder="https://..." style={inp({flex:1})} />
+                          <label style={{padding:'8px 12px',borderRadius:'8px',border:'1.5px solid var(--sky)',background:'var(--sky3)',color:'var(--sky)',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>
+                            UPLOAD
+                            <input type="file" style={{display:'none'}} onChange={async (e)=>{
+                              const file = e.target.files?.[0]; if(!file) return;
+                              const ext = file.name.split('.').pop();
+                              const fileName = `${formQ.section}/${Date.now()}.${ext}`;
+                              const { data, error } = await supabase.storage.from('question-assets').upload(fileName, file, { upsert: true });
+                              if(error) return alert(error.message);
+                              const { data: urlData } = supabase.storage.from('question-assets').getPublicUrl(fileName);
+                              setFormQ({...formQ, audio_url: urlData.publicUrl, image_url: urlData.publicUrl});
+                            }} />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  ) : ( // qStep === 3
+                    <div style={{display:'flex',flexDirection:'column',gap:'20px',animation:'drawerSlideIn 0.3s ease-out'}}>
+                      <div style={{fontSize:'12px',fontWeight:800,color:'var(--navy)',textTransform:'uppercase',letterSpacing:'0.5px'}}>Step 3: Assignments</div>
+                      <div style={{background:'var(--off)',borderRadius:'12px',padding:'16px',border:'1.5px solid var(--bdr)',marginBottom:'40px'}}>
+                        <div style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase',marginBottom:'12px'}}>Target Taxonomy</div>
+                        <div style={{marginBottom:'12px'}}>
+                          <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Departments</div>
+                          <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                            {departments.map(d=>(
+                              <button key={d.id} onClick={()=>toggleArr(selectedDepts,setSelectedDepts,d.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedDepts.includes(d.id)?'var(--navy)':'var(--bdr)',background:selectedDepts.includes(d.id)?'var(--navy)':'#fff',color:selectedDepts.includes(d.id)?'#fff':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{d.name}</button>
+                            ))}
+                          </div>
+                        </div>
+                        {selectedDepts.length > 0 && (
+                          <div style={{marginBottom:'12px'}}>
+                            <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Sub-Roles</div>
+                            <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                              {filteredSubRoles.map(s=>(
+                                <button key={s.id} onClick={()=>toggleArr(selectedSubRoles,setSelectedSubRoles,s.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedSubRoles.includes(s.id)?'var(--sky)':'var(--bdr)',background:selectedSubRoles.includes(s.id)?'var(--sky3)':'#fff',color:selectedSubRoles.includes(s.id)?'var(--sky)':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{s.name}</button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div>
+                          <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',marginBottom:'6px',textTransform:'uppercase'}}>Use Cases</div>
+                          <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                            {useCases.map(u=>(
+                              <button key={u.id} onClick={()=>toggleArr(selectedUseCases,setSelectedUseCases,u.id)} style={{padding:'4px 10px',borderRadius:'100px',border:'1.5px solid',borderColor:selectedUseCases.includes(u.id)?'var(--teal)':'var(--bdr)',background:selectedUseCases.includes(u.id)?'#E6F7F4':'#fff',color:selectedUseCases.includes(u.id)?'var(--teal)':'var(--t2)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>{u.name}</button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1605,19 +1627,16 @@ export default function AdminDashboard() {
                     <span style={{padding:'4px 10px',borderRadius:'6px',background:'#f1f5f9',color:'#475569',fontSize:'11px',fontWeight:800,textTransform:'uppercase'}}>{detailQ.difficulty}</span>
                     <span style={{padding:'4px 10px',borderRadius:'6px',background:'#f5f3ff',color:'#7c3aed',fontSize:'11px',fontWeight:800,textTransform:'uppercase'}}>{detailQ.role_tag || 'General'}</span>
                   </div>
-
                   <div>
                     <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',marginBottom:'8px'}}>Question Content</div>
                     <div style={{fontSize:'16px',color:'var(--navy)',lineHeight:1.6,whiteSpace:'pre-wrap',fontWeight:500}}>{detailQ.content}</div>
                   </div>
-
                   {detailQ.correct_answer && (
                     <div style={{padding:'16px',background:'#f0fdf4',borderRadius:'12px',border:'1px solid #bbf7d0'}}>
                       <div style={{fontSize:'11.5px',fontWeight:700,color:'#166534',textTransform:'uppercase',marginBottom:'4px'}}>Correct Answer</div>
                       <div style={{fontSize:'14px',color:'#166534',fontWeight:600}}>✓ {detailQ.correct_answer}</div>
                     </div>
                   )}
-
                   {detailQ.audio_url && (
                     <div style={{padding:'16px',background:'var(--off)',borderRadius:'12px',border:'1px solid var(--bdr)'}}>
                       <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',marginBottom:'12px'}}>Asset / Resource</div>
@@ -1630,14 +1649,17 @@ export default function AdminDashboard() {
 
             {/* Drawer Footer */}
             <div style={{padding:'20px 24px',borderTop:'1px solid var(--bdr)',background:'#fafafa',display:'flex',justifyContent:'flex-end',gap:'10px'}}>
-              <button onClick={()=>{setShowForm(false);setDetailQ(null);setShowTemplateForm(false);setEditTemplate(null);setShowUserForm(false);setDetailUser(null);setShowOrgForm(false);setDetailOrg(null);setOrgStep(1);resetForm();}} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'13px',fontWeight:600,color:'var(--t2)',cursor:'pointer'}}>Close</button>
+              <button onClick={()=>{setShowForm(false);setDetailQ(null);setShowTemplateForm(false);setEditTemplate(null);setShowUserForm(false);setDetailUser(null);setShowOrgForm(false);setDetailOrg(null);setOrgStep(1);setQStep(1);resetForm();}} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'13px',fontWeight:600,color:'var(--t2)',cursor:'pointer'}}>Close</button>
               
               {showOrgForm && orgStep === 1 && <button onClick={()=>setOrgStep(2)} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Next Step →</button>}
               {showOrgForm && orgStep === 2 && <button onClick={()=>setOrgStep(1)} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid var(--navy)',background:'#fff',color:'var(--navy)',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>← Back</button>}
 
-              {(showForm || showTemplateForm || showUserForm || (showOrgForm && orgStep === 2)) && <button onClick={showTemplateForm?saveTemplate:showUserForm?saveUser:showOrgForm?saveOrg:saveQuestion} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Save Changes</button>}
+              {showForm && qStep < 3 && <button onClick={()=>setQStep(qStep+1)} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Next Step →</button>}
+              {showForm && qStep > 1 && <button onClick={()=>setQStep(qStep-1)} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid var(--navy)',background:'#fff',color:'var(--navy)',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>← Back</button>}
+
+              {(showTemplateForm || showUserForm || (showOrgForm && orgStep === 2) || (showForm && qStep === 3)) && <button onClick={showTemplateForm?saveTemplate:showUserForm?saveUser:showOrgForm?saveOrg:saveQuestion} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Save Changes</button>}
               
-              {detailQ && !showForm && <button onClick={()=>{startEdit(detailQ);setDetailQ(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit This Question</button>}
+              {detailQ && !showForm && <button onClick={()=>{startEdit(detailQ);setQStep(1);setDetailQ(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit This Question</button>}
               {detailUser && !showUserForm && <button onClick={()=>{startEditUser(detailUser);setDetailUser(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit Profile</button>}
               {detailOrg && !showOrgForm && <button onClick={()=>{startEditOrg(detailOrg);setOrgStep(1);setDetailOrg(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit Organization</button>}
             </div>
