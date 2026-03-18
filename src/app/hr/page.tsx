@@ -87,15 +87,14 @@ export default function HRPortal() {
     if (!org?.id) { alert('Sistemsel Hata: Kurum ID bulunamadı.'); return }
     setSaving(true)
     try {
-      const newId = crypto.randomUUID()
-      const { error } = await supabase.from('users').insert({
-        id: newId,
-        email: newCandidate.email,
-        full_name: newCandidate.full_name,
-        role: 'candidate',
-        org_id: org.id
+      const res = await fetch('/api/create-candidate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newCandidate.email, full_name: newCandidate.full_name, org_id: org.id })
       })
-      if (error) throw error
+      const resData = await res.json()
+      if (!res.ok) throw new Error(resData.error || 'Giriş verisi oluşturulamadı.')
+      const newId = resData.id
 
       if (newCandidate.template_id) {
         const { error: exErr } = await supabase.from('exams').insert({
