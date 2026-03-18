@@ -59,6 +59,10 @@ export default function AdminDashboard() {
   const [qTotal, setQTotal] = useState(0)
   const [qPage, setQPage] = useState(0)
   const [qPageSize, setQPageSize] = useState(25)
+  const [selectedQIds, setSelectedQIds] = useState<string[]>([])
+  const [showDelConfirm, setShowDelConfirm] = useState(false)
+  const [delItems, setDelItems] = useState<any[]>([])
+  const [delInput, setDelInput] = useState('')
 
   // Filters
   const [qSearch, setQSearch] = useState('')
@@ -205,7 +209,59 @@ export default function AdminDashboard() {
     setFiltersPending(false)
   }
 
-  function applyFilters() { setQPage(0); runQuery(0) }
+  function applyFilters() { 
+    setSelectedQIds([])
+    setQPage(0)
+    runQuery(0) 
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedQIds(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])
+  }
+
+  function toggleSelectAll() {
+    if (selectedQIds.length === questions.length) setSelectedQIds([])
+    else setSelectedQIds(questions.map(q=>q.id))
+  }
+
+  function startBulkDelete() {
+    const items = questions.filter(q=>selectedQIds.includes(q.id))
+    setDelItems(items)
+    setDelInput('')
+    setShowDelConfirm(true)
+  }
+
+  async function finalDelete() {
+    if (delItems.length > 5 && delInput !== 'DELETE') return
+    setQLoading(true)
+    const ids = delItems.map(i=>i.id)
+    
+    // Check if used in exams (safety check)
+    const { data: used } = await supabase.from('exam_answers').select('question_id').in('question_id', ids)
+    const usedIds = new Set(used?.map(u=>u.question_id) || [])
+    
+    const toSoftDelete = ids.filter(id => usedIds.has(id))
+    const toHardDelete = ids.filter(id => !usedIds.has(id))
+
+    if (toSoftDelete.length) {
+      await supabase.from('questions').update({ active:false, is_latest:false }).in('id', toSoftDelete)
+    }
+    if (toHardDelete.length) {
+      await supabase.from('questions').delete().in('id', toHardDelete)
+    }
+
+    setShowDelConfirm(false)
+    setDelItems([])
+    setSelectedQIds([])
+    runQuery(qPage)
+    loadStats()
+  }
+
+  function startSingleDelete(q: any) {
+    setDelItems([q])
+    setDelInput('')
+    setShowDelConfirm(true)
+  }
 
   async function saveQuestion() {
     if (!formQ.content.trim()) return
@@ -265,13 +321,6 @@ export default function AdminDashboard() {
     if (assignments.length) await supabase.from('question_assignments').insert(assignments)
   }
 
-  async function deleteQuestion(id: string) {
-    if (!confirm('Delete this question?')) return
-    const { count } = await supabase.from('exam_answers').select('id',{count:'exact',head:true}).eq('question_id', id)
-    if ((count||0) > 0) await supabase.from('questions').update({ active:false, is_latest:false }).eq('id', id)
-    else await supabase.from('questions').delete().eq('id', id)
-    runQuery(qPage); loadStats()
-  }
 
   async function toggleActive(id: string, current: boolean) {
     await supabase.from('questions').update({ active: !current }).eq('id', id)
@@ -560,6 +609,9 @@ export default function AdminDashboard() {
                   <button onClick={()=>{setShowAI(!showAI);setShowBulk(false);setShowForm(false)}} style={{padding:'8px 13px',borderRadius:'7px',border:'1.5px solid #7C3AED',background:'#F5F3FF',color:'#5B21B6',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>🤖 AI Import</button>
                   <button onClick={()=>{setShowBulk(!showBulk);setShowAI(false);setShowForm(false)}} style={{padding:'8px 13px',borderRadius:'7px',border:'1.5px solid var(--sky)',background:'var(--sky3)',color:'var(--sky)',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>⬆ Bulk Upload</button>
                   <button onClick={exportQuestions} style={{padding:'8px 13px',borderRadius:'7px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12px',fontWeight:600,color:'var(--navy)',cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Export</button>
+                  {selectedQIds.length > 0 && (
+                    <button onClick={startBulkDelete} style={{padding:'8px 16px',borderRadius:'7px',border:'none',background:'#DC2626',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>🗑 Delete {selectedQIds.length}</button>
+                  )}
                   <div style={{flex:1}}/>
                   <button onClick={()=>{resetForm();setShowForm(true);setShowBulk(false);setShowAI(false)}} style={{padding:'8px 16px',borderRadius:'7px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>+ Add Question</button>
                 </div>
@@ -836,14 +888,17 @@ export default function AdminDashboard() {
                       <table style={{width:'100%',borderCollapse:'collapse'}}>
                         <thead>
                           <tr style={{borderBottom:'1px solid var(--bdr)',background:'var(--off)'}}>
-                            {['Section','Question','CEFR','Diff','Analytics','Assignments','Status','Actions'].map(h=>(
-                              <th key={h} style={{padding:'9px 12px',textAlign:'left',fontSize:'10.5px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</th>
+                            {['','Section','Question','CEFR','Diff','Analytics','Assignments','Status','Actions'].map((h,idx)=>(
+                              <th key={idx} style={{padding:'9px 12px',textAlign:'left',fontSize:'10.5px',fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'0.4px'}}>
+                                {idx===0 ? <input type="checkbox" checked={selectedQIds.length === questions.length && questions.length > 0} onChange={toggleSelectAll} style={{cursor:'pointer'}} /> : h}
+                              </th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
                           {questions.map((q,i)=>(
-                            <tr key={q.id} style={{borderBottom:'1px solid var(--bdr)',background:i%2===0?'#fff':'#FAFBFC'}}>
+                            <tr key={q.id} style={{borderBottom:'1px solid var(--bdr)',background:selectedQIds.includes(q.id)?'rgba(58,142,208,0.05)':(i%2===0?'#fff':'#FAFBFC')}}>
+                              <td style={{padding:'9px 12px',width:'30px'}}><input type="checkbox" checked={selectedQIds.includes(q.id)} onChange={()=>toggleSelect(q.id)} style={{cursor:'pointer'}} /></td>
                               <td style={{padding:'9px 12px'}}><span style={{fontSize:'10.5px',fontWeight:700,padding:'2px 7px',borderRadius:'100px',background:(sectionColors[q.section]||'#888')+'20',color:sectionColors[q.section]||'#888',textTransform:'capitalize'}}>{q.section}</span></td>
                               <td style={{padding:'9px 12px',maxWidth:'210px'}}>
                                 <div style={{fontSize:'12.5px',color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} onClick={()=>setDetailQ(q)}>{q.content}</div>
@@ -876,7 +931,7 @@ export default function AdminDashboard() {
                                 <div style={{display:'flex',gap:'4px'}}>
                                   <button onClick={()=>{setDetailQ(q);setShowForm(false)}} style={{padding:'3px 8px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'10.5px',fontWeight:600,color:'var(--t2)',fontFamily:'var(--fb)'}}>View</button>
                                   <button onClick={()=>startEdit(q)} style={{padding:'3px 8px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'10.5px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>Edit</button>
-                                  <button onClick={()=>deleteQuestion(q.id)} style={{padding:'3px 8px',borderRadius:'5px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'10.5px',fontWeight:600,color:'#DC2626',fontFamily:'var(--fb)'}}>Del</button>
+                                  <button onClick={()=>startSingleDelete(q)} style={{padding:'3px 8px',borderRadius:'5px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'10.5px',fontWeight:600,color:'#DC2626',fontFamily:'var(--fb)'}}>Del</button>
                                 </div>
                               </td>
                             </tr>
@@ -1137,6 +1192,36 @@ export default function AdminDashboard() {
 
         </div>
       </div>
+
+      {showDelConfirm && (
+        <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:2000}}>
+          <div style={{background:'#fff',borderRadius:'16px',width:'440px',padding:'24px',boxShadow:'0 20px 25px -5px rgba(0,0,0,0.1)'}}>
+            <div style={{fontSize:'32px',marginBottom:'16px'}}>⚠️</div>
+            <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'8px'}}>
+              {delItems.length === 1 ? 'Delete Question?' : `Delete ${delItems.length} Questions?`}
+            </h3>
+            <p style={{fontSize:'14px',color:'var(--t3)',lineHeight:1.5,marginBottom:'20px'}}>
+              {delItems.length === 1 
+                ? 'Are you sure you want to remove this question? This action might be irreversible if the question hasn\'t been used in exams.'
+                : `You are about to delete ${delItems.length} questions. This will affect question bank statistics and future exam generation.`}
+            </p>
+            
+            {delItems.length > 5 && (
+              <div style={{marginBottom:'20px',padding:'12px',background:'#FFFBEB',borderRadius:'8px',border:'1.5px solid #FEF3C7'}}>
+                <label style={{fontSize:'12px',fontWeight:700,color:'#92400E',display:'block',marginBottom:'6px'}}>Type "DELETE" to confirm bulk action</label>
+                <input value={delInput} onChange={e=>setDelInput(e.target.value.toUpperCase())} placeholder="DELETE" style={{width:'100%',padding:'9px 12px',borderRadius:'6px',border:'1.5px solid #FCD34D',fontSize:'13px',fontWeight:700,fontFamily:'var(--fb)',outline:'none'}} />
+              </div>
+            )}
+
+            <div style={{display:'flex',gap:'10px'}}>
+              <button onClick={()=>setShowDelConfirm(false)} style={{flex:1,padding:'10px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'13.5px',fontWeight:600,color:'var(--t2)',cursor:'pointer',fontFamily:'var(--fb)'}}>Cancel</button>
+              <button onClick={finalDelete} disabled={delItems.length > 5 && delInput !== 'DELETE'} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'#DC2626',color:'#fff',fontSize:'13.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',opacity:(delItems.length > 5 && delInput !== 'DELETE') ? 0.5 : 1}}>
+                {delItems.length === 1 ? 'Delete' : 'Delete All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
