@@ -198,14 +198,59 @@ export default function HRPortal() {
       return 'A1'
     }
 
-    const DESCRIPTORS: Record<string,string> = {
-      C2: 'Can understand with ease virtually everything heard or read.',
-      C1: 'Can express themselves fluently, spontaneously and precisely.',
-      B2: 'Can interact with a degree of fluency with native speakers.',
-      B1: 'Can deal with most situations likely to arise whilst travelling.',
-      A2: 'Can communicate in simple and routine tasks.',
-      A1: 'Can understand and use familiar everyday expressions.',
+    const ROLE_DESCRIPTORS: Record<string, Record<string, string>> = {
+      cockpit: {
+        C2: "Exhibits full mastery of aviation English. Can manage complex cockpit communications and non-routine emergencies with absolute precision and linguistic ease.",
+        C1: "Highly proficient in flight deck operations. Can handle diverse weather challenges and coordination with ATC spontaneously and fluently.",
+        B2: "Effective communicator in standard flight operations. Can maintain safety-critical dialogue and understand most technical advisories.",
+        B1: "Capable of basic cockpit communication. May struggle with nuance in high-workload or non-standard emergency scenarios.",
+        A2: "Limited to pre-formatted radiotelephony. Lacks the fluency required for safe international flight deck operations in complex environments.",
+        A1: "Insufficient for flight deck duties. Only basic recognition of aviation terminology."
+      },
+      cabin: {
+        C2: "Consummate professional. Handles passenger needs, safety briefings, and emergency coordination with exceptional clarity and empathy.",
+        C1: "Strong communicator. Can resolve passenger conflicts and provide detailed medical or safety assistance fluently.",
+        B2: "Solid communication skills. Manages routine cabin duties and safety announcements effectively. Good passenger interaction.",
+        B1: "Basic interaction for service. May have difficulty explaining complex safety procedures or handling agitated passengers.",
+        A2: "Limited to simple service requests. Unable to provide detailed safety instructions or manage diverse passenger needs.",
+        A1: "Minimal communication. Not suitable for safety-critical cabin duties."
+      },
+      maintenance: {
+        C2: "Complete technical and professional mastery. Can document complex repairs and discuss engineering nuances with absolute precision.",
+        C1: "Very strong technical English. Fluently interprets complex manuals and coordinates seamlessly with engineering teams.",
+        B2: "Competent for standard maintenance tasks. Can follow technical manuals and document repairs clearly.",
+        B1: "Basic technical understanding. May require assistance with complex troubleshooting manuals or detailed reporting.",
+        A2: "Limited to simple maintenance tasks and labels. High risk of misinterpreting complex technical documentation.",
+        A1: "Insufficient. Cannot safely interpret maintenance manuals or safety warnings."
+      },
+      atc: {
+        C2: "Exceptional command of aeronautical radiotelephony. Can manage high-density traffic and complex emergencies with flawless clarity.",
+        C1: "Highly effective controller. Maintains calm and precise communication even during peak traffic and non-routine events.",
+        B2: "Reliable controller for standard traffic flow. Communication is clear and follows ICAO standards effectively.",
+        B1: "Meets basic requirements but may lack the speed and precision needed for high-complexity sectors or emergencies.",
+        A2: "Unsafe for control duties. Communication is too slow and prone to misinterpretation.",
+        A1: "No functional control capability."
+      },
+      ground: {
+        C2: "Expert in ground operations. Seamlessly coordinates boarding, fueling, and ramp services with diverse international teams.",
+        C1: "Very effective communication. Manages passenger boarding and ground handling logistics with high efficiency.",
+        B2: "Competent for aviation ground duties. Can handle most passenger inquiries and ramp communications effectively.",
+        B1: "Basic service communication. May struggle with complex logistics or handling large groups of non-native speakers.",
+        A2: "Limited to simple tasks. Strains to handle passenger questions or complex ground coordination.",
+        A1: "Insufficient for professional ground staff duties."
+      },
+      general: {
+        C2: "Mastery of the language. Can understand with ease virtually everything heard or read in an aviation context.",
+        C1: "Advanced proficiency. Can express ideas fluently and spontaneously without much searching for expressions.",
+        B2: "Upper-intermediate. Can interact with a degree of fluency that makes regular interaction quite possible.",
+        B1: "Intermediate. Can deal with most situations likely to arise while traveling or working in aviation.",
+        A2: "Elementary. Can communicate in simple and routine tasks requiring a direct exchange of information.",
+        A1: "Beginner. Can understand and use familiar everyday expressions and phrases."
+      }
     }
+
+    const roleKey = exam.exam_templates?.role_profile || 'general'
+    const DESCRIPTORS = ROLE_DESCRIPTORS[roleKey] || ROLE_DESCRIPTORS.general
 
     for (const s of sections) {
       let grade = 0
