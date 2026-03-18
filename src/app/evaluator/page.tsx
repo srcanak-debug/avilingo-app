@@ -56,6 +56,7 @@ export default function EvaluatorQueue() {
   const [rubricScores, setRubricScores] = useState<RubricScore[]>([])
   const [generalFeedback, setGeneralFeedback] = useState('')
   const [overrideCefr, setOverrideCefr] = useState<string|null>(null)
+  const [proctoringEvents, setProctoringEvents] = useState<any[]>([])
 
   // History
   const [showHistory, setShowHistory] = useState(false)
@@ -128,6 +129,10 @@ export default function EvaluatorQueue() {
     setRubricScores(rubrics)
     setGeneralFeedback('')
     setOverrideCefr(null)
+
+    // Fetch proctoring logs
+    const { data: procData } = await supabase.from('proctoring_events').select('*').eq('exam_id', item.exam_id)
+    setProctoringEvents(procData || [])
   }
 
   function openItem(item: any) {
@@ -325,6 +330,19 @@ export default function EvaluatorQueue() {
                   {activeItem.questions?.competency_tag && <span style={{fontSize:'11px',padding:'4px 10px',borderRadius:'100px',background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.35)'}}>{activeItem.questions.competency_tag.replace(/_/g,' ')}</span>}
                 </div>
               </div>
+
+              {/* Proctoring Warning */}
+              {proctoringEvents.length > 0 && (
+                <div style={{background:'rgba(239, 68, 68, 0.1)',borderRadius:'12px',padding:'14px 18px',border:'1px solid rgba(239, 68, 68, 0.3)',marginBottom:'16px',display:'flex',alignItems:'center',gap:'12px'}}>
+                  <span style={{fontSize:'20px'}}>⚠️</span>
+                  <div>
+                    <div style={{fontSize:'13px',fontWeight:700,color:'#EF4444'}}>Security Alert: {proctoringEvents.length} violations detected during this exam</div>
+                    <div style={{fontSize:'12px',color:'rgba(239, 68, 68, 0.7)',marginTop:'2px'}}>
+                      {proctoringEvents.filter(e => e.event_type === 'tab_switch').length} tab switches, {proctoringEvents.filter(e => e.event_type === 'fullscreen_exit').length} fullscreen exits.
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Prompt + Response */}
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px',marginBottom:'18px'}}>

@@ -54,7 +54,7 @@ export default function HRPortal() {
   async function loadData(orgId: string) {
     const [{ data: candidateData }, { data: examData }, { data: creditData }, { data: templateData }] = await Promise.all([
       supabase.from('users').select('*').eq('org_id', orgId).eq('role', 'candidate').order('created_at', { ascending: false }),
-      supabase.from('exams').select('*,exam_templates(name,passing_cefr),users:candidate_id(full_name,email)').eq('org_id', orgId).order('created_at', { ascending: false }),
+      supabase.from('exams').select('*,exam_templates(name,passing_cefr),users:candidate_id(full_name,email),proctoring_events(id,event_type)').eq('org_id', orgId).order('created_at', { ascending: false }),
       supabase.from('credits').select('*').eq('org_id', orgId).order('created_at', { ascending: false }),
       supabase.from('exam_templates').select('*').order('name'),
     ])
@@ -330,7 +330,7 @@ export default function HRPortal() {
                 <table style={{width:'100%',borderCollapse:'collapse'}}>
                   <thead>
                     <tr style={{borderBottom:'1px solid rgba(255,255,255,0.06)',background:'rgba(255,255,255,0.03)'}}>
-                      {['Candidate','Exams','Latest Result','Actions'].map(h=>(
+                      {['Candidate','Exams','Latest Result','Security','Actions'].map(h=>(
                         <th key={h} style={{padding:'10px 16px',textAlign:'left',fontSize:'11px',fontWeight:700,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</th>
                       ))}
                     </tr>
@@ -360,6 +360,13 @@ export default function HRPortal() {
                                 <span style={{fontSize:'11px',fontWeight:600,padding:'2px 8px',borderRadius:'100px',background:statusColor[latest.status]||'#F1EFE8',color:'#333'}}>{statusText[latest.status]||latest.status}</span>
                               </div>
                             ) : <span style={{fontSize:'12px',color:'rgba(255,255,255,0.25)'}}>No exams</span>}
+                          </td>
+                          <td style={{padding:'12px 16px',fontSize:'13px'}}>
+                            {latest?.proctoring_events?.length > 0 ? (
+                              <span style={{fontSize:'11px',fontWeight:700,color:'#EF4444',background:'rgba(239, 68, 68, 0.15)',padding:'3px 8px',borderRadius:'6px'}}>⚠️ {latest.proctoring_events.length} Flags</span>
+                            ) : latest ? (
+                              <span style={{fontSize:'11px',color:'rgba(255,255,255,0.2)'}}>✓ Secure</span>
+                            ) : null}
                           </td>
                           <td style={{padding:'12px 16px'}}>
                             <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
@@ -396,7 +403,7 @@ export default function HRPortal() {
             <table style={{width:'100%',borderCollapse:'collapse'}}>
               <thead>
                 <tr style={{borderBottom:'1px solid rgba(255,255,255,0.06)',background:'rgba(255,255,255,0.03)'}}>
-                  {['Candidate','Assessment','Score','Status','Date','Actions'].map(h=>(
+                  {['Candidate','Assessment','Score','Status','Date','Security','Actions'].map(h=>(
                     <th key={h} style={{padding:'10px 16px',textAlign:'left',fontSize:'11px',fontWeight:700,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'0.4px'}}>{h}</th>
                   ))}
                 </tr>
@@ -415,6 +422,15 @@ export default function HRPortal() {
                       <span style={{fontSize:'11px',fontWeight:600,padding:'2px 8px',borderRadius:'100px',background:statusColor[e.status]||'#F1EFE8',color:'#333'}}>{statusText[e.status]||e.status}</span>
                     </td>
                     <td style={{padding:'11px 16px',fontSize:'12px',color:'rgba(255,255,255,0.4)'}}>{new Date(e.created_at).toLocaleDateString('en-GB')}</td>
+                    <td style={{padding:'11px 16px'}}>
+                      {e.proctoring_events?.length > 0 ? (
+                        <span style={{fontSize:'10px',fontWeight:700,padding:'2px 6px',borderRadius:'4px',background:'rgba(239, 68, 68, 0.15)',color:'#EF4444',display:'inline-flex',alignItems:'center',gap:'4px'}}>
+                          <span>⚠️</span> {e.proctoring_events.length}
+                        </span>
+                      ) : (
+                        <span style={{fontSize:'11px',color:'rgba(255,255,255,0.2)'}}>✓ Secure</span>
+                      )}
+                    </td>
                     <td style={{padding:'11px 16px'}}>
                       <div style={{display:'flex',gap:'6px'}}>
                         {e.status==='certified'&&<button onClick={()=>downloadRoleFitReport(e.id)} style={{padding:'4px 10px',borderRadius:'6px',border:'1px solid rgba(26,209,138,0.3)',background:'rgba(26,209,138,0.1)',color:'#1AD18A',fontSize:'11.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>⬇ Report</button>}
