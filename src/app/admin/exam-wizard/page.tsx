@@ -261,8 +261,38 @@ function ExamWizardInner() {
         org_id: data.org_id,
         status: 'pending',
       }))
-      const { error: examErr } = await supabase.from('exams').insert(examInserts)
-      if (examErr) console.error('Error creating exams:', examErr.message)
+      const { data: createdExams, error: examErr } = await supabase.from('exams').insert(examInserts).select()
+      
+      if (examErr) {
+        console.error('Error creating exams:', examErr.message)
+      } else if (createdExams && createdExams.length > 0) {
+        // Prepare data for /api/invite
+        const invitePayload = createdExams.map(ex => {
+          const c = candidates.find(cand => cand.id === ex.candidate_id)
+          return {
+            id: ex.id,
+            candidate_email: c?.email,
+            candidate_name: c?.full_name || ''
+          }
+        }).filter(p => p.candidate_email)
+
+        // Send out the emails in the background
+        if (invitePayload.length > 0) {
+          try {
+            await fetch('/api/invite', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                exams: invitePayload,
+                templateName: data.name,
+                message: data.invite_message
+              })
+            })
+          } catch (e) {
+            console.error('Failed to send invite emails', e)
+          }
+        }
+      }
     }
 
     // Audit log
