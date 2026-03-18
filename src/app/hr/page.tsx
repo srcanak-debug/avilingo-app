@@ -179,61 +179,165 @@ export default function HRPortal() {
   async function downloadRoleFitReport(examId: string) {
     const exam = exams.find(e => e.id === examId)
     if (!exam) return
+    
+    // Fetch detailed data for the report
+    const [{ data: answers }, { data: grades }] = await Promise.all([
+      supabase.from('exam_answers').select('*').eq('exam_id', examId),
+      supabase.from('grades').select('*').eq('exam_id', examId)
+    ])
+
+    const sectionScores: Record<string, { grade: number, level: string, comment: string }> = {}
+    const sections = ['grammar', 'reading', 'listening', 'writing', 'speaking']
+    
+    const mapToCEFR = (pct: number) => {
+      if (pct >= 91) return 'C2'
+      if (pct >= 76) return 'C1'
+      if (pct >= 61) return 'B2'
+      if (pct >= 41) return 'B1'
+      if (pct >= 21) return 'A2'
+      return 'A1'
+    }
+
+    const DESCRIPTORS: Record<string,string> = {
+      C2: 'Can understand with ease virtually everything heard or read.',
+      C1: 'Can express themselves fluently, spontaneously and precisely.',
+      B2: 'Can interact with a degree of fluency with native speakers.',
+      B1: 'Can deal with most situations likely to arise whilst travelling.',
+      A2: 'Can communicate in simple and routine tasks.',
+      A1: 'Can understand and use familiar everyday expressions.',
+    }
+
+    for (const s of sections) {
+      let grade = 0
+      if (['grammar', 'reading', 'listening'].includes(s)) {
+        const sa = answers?.filter(a => a.section === s) || []
+        if (sa.length > 0) {
+          const correct = sa.filter(a => (a.auto_score || 0) >= 1).length
+          grade = Math.round((correct / sa.length) * 100)
+        }
+      } else {
+        const sg = grades?.filter(g => g.section === s) || []
+        if (sg.length > 0) {
+          grade = Math.round(sg.reduce((sum, g) => sum + (g.numeric_score || 0), 0) / sg.length)
+        }
+      }
+      const lvl = mapToCEFR(grade)
+      sectionScores[s] = { grade, level: lvl, comment: DESCRIPTORS[lvl] }
+    }
+
     const { default: jsPDF } = await import('jspdf')
     const doc = new jsPDF({ unit:'mm', format:'a4' })
-    doc.setFillColor(12, 31, 63)
-    doc.rect(0, 0, 210, 40, 'F')
-    doc.setTextColor(255,255,255)
-    doc.setFontSize(20); doc.setFont('helvetica','bold')
-    doc.text('AVILINGO', 20, 18)
-    doc.setFontSize(10); doc.setFont('helvetica','normal')
-    doc.setTextColor(90,174,223)
-    doc.text('Role-Fit Assessment Report', 20, 26)
-    doc.setTextColor(255,255,255)
-    doc.setFontSize(8)
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} · Confidential`, 20, 33)
+    const margin = 15
+    const pageWidth = 210
 
-    doc.setTextColor(12,31,63)
-    doc.setFontSize(14); doc.setFont('helvetica','bold')
-    doc.text('Candidate Profile', 20, 55)
-    doc.setFontSize(11); doc.setFont('helvetica','normal')
-    doc.text(`Name: ${exam.users?.full_name || exam.users?.email}`, 20, 65)
-    doc.text(`Organization: ${org?.name}`, 20, 72)
-    doc.text(`Assessment: ${exam.exam_templates?.name}`, 20, 79)
-    doc.text(`Date: ${new Date(exam.completed_at||exam.created_at).toLocaleDateString('en-GB')}`, 20, 86)
+    // ─── 0. HEADER LOGO & INFO ───
+    doc.setFillColor(12, 31, 63) // Dark Blue branding color
+    // Drawing a stylized 'A' plane logo placeholder
+    doc.setDrawColor(12, 31, 63); doc.setLineWidth(1.5)
+    doc.line(15, 15, 23, 15); doc.line(15, 15, 19, 23); doc.line(23, 15, 19, 23)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(12, 31, 63)
+    doc.text('AVILINGO', 27, 19)
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor(130, 130, 130)
+    doc.text('LANGUAGE ASSESSMENT & TRAINING SOLUTIONS', 27, 23)
 
-    doc.setFillColor(240,249,255)
-    doc.rect(15, 95, 180, 35, 'F')
-    doc.setFontSize(24); doc.setFont('helvetica','bold')
-    doc.setTextColor(exam.final_cefr_score==='C1'||exam.final_cefr_score==='C2'?184:exam.final_cefr_score==='B2'?10:58,
-      exam.final_cefr_score==='C1'||exam.final_cefr_score==='C2'?136:exam.final_cefr_score==='B2'?136:142,
-      exam.final_cefr_score==='C1'||exam.final_cefr_score==='C2'?26:exam.final_cefr_score==='B2'?70:208)
-    doc.text(exam.final_cefr_score||'PENDING', 105, 117, { align:'center' })
-    doc.setFontSize(10); doc.setFont('helvetica','normal')
-    doc.setTextColor(100,100,100)
-    doc.text(`Overall CEFR Level · Score: ${exam.final_numeric_score||'—'}%`, 105, 125, { align:'center' })
+    // ─── 1. CANDIDATE PROFILE TABLE ───
+    const tableTop = 32
+    doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.2)
+    doc.rect(margin, tableTop, 115, 30) // Info block
+    doc.rect(margin + 115, tableTop, 65, 30) // Large logo box
+    
+    doc.line(margin, tableTop + 10, margin + 115, tableTop + 10)
+    doc.line(margin, tableTop + 20, margin + 115, tableTop + 20)
+    doc.line(margin + 25, tableTop, margin + 25, tableTop + 30)
 
-    const passed = ['A1','A2','B1','B2','C1','C2'].indexOf(exam.final_cefr_score) >= ['A1','A2','B1','B2','C1','C2'].indexOf(exam.exam_templates?.passing_cefr)
-    doc.setFillColor(passed?26:239, passed?209:68, passed?138:68)
-    doc.roundedRect(70, 133, 70, 10, 2, 2, 'F')
-    doc.setTextColor(255,255,255); doc.setFontSize(9); doc.setFont('helvetica','bold')
-    doc.text(passed?`✓ MEETS REQUIRED LEVEL (${exam.exam_templates?.passing_cefr})`:`✗ BELOW REQUIRED LEVEL (${exam.exam_templates?.passing_cefr})`, 105, 139.5, { align:'center' })
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(50, 50, 50)
+    doc.text('NAME', margin + 3, tableTop + 6.5)
+    doc.text('ASSESSOR', margin + 3, tableTop + 16.5)
+    doc.text('COMPANY', margin + 3, tableTop + 26.5)
 
-    doc.setTextColor(12,31,63)
-    doc.setFontSize(12); doc.setFont('helvetica','bold')
-    doc.text('Recommendation', 20, 158)
-    doc.setFontSize(10); doc.setFont('helvetica','normal')
-    const rec = passed
-      ? `${exam.users?.full_name} has demonstrated the required aviation English proficiency at ${exam.final_cefr_score} level. This candidate MEETS the minimum language requirement of ${exam.exam_templates?.passing_cefr} and is RECOMMENDED for the role.`
-      : `${exam.users?.full_name} has demonstrated aviation English proficiency at ${exam.final_cefr_score||'an insufficient'} level. This candidate does NOT meet the minimum language requirement of ${exam.exam_templates?.passing_cefr} and further training is recommended before reassessment.`
-    const lines = doc.splitTextToSize(rec, 170)
-    doc.text(lines, 20, 168)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(20, 20, 20)
+    doc.text(exam.users?.full_name || exam.users?.email || '—', margin + 28, tableTop + 6.5)
+    doc.text('Avilingo Platform', margin + 28, tableTop + 16.5)
+    doc.text(org?.name || 'N/A', margin + 28, tableTop + 26.5)
 
-    doc.setFontSize(8); doc.setTextColor(150,150,150)
+    // Right big logo placeholder
+    doc.setTextColor(230, 230, 230); doc.setFontSize(40); doc.setFont('helvetica', 'bold')
+    doc.text('A', margin + 140, tableTop + 22)
+
+    // ─── 2. LANGUAGE SUMMARY SECTION ───
+    const summaryTop = 72
+    doc.setDrawColor(200, 200, 200)
+    doc.rect(margin, summaryTop, pageWidth - (margin * 2), 35)
+    doc.line(margin + 30, summaryTop, margin + 30, summaryTop + 35)
+    doc.line(margin + 140, summaryTop, margin + 140, summaryTop + 35)
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(50, 50, 50)
+    doc.text('Language', margin + 5, summaryTop + 15)
+    doc.text('English', margin + 7, summaryTop + 20)
+
+    doc.setFontSize(8); doc.setTextColor(100, 100, 100)
+    doc.text('COMMENT', margin + 35, summaryTop + 7)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40, 40, 40)
+    const overallDesc = DESCRIPTORS[exam.final_cefr_score || 'B1']
+    const splitComment = doc.splitTextToSize(overallDesc, 100)
+    doc.text(splitComment, margin + 35, summaryTop + 13)
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 100, 100)
+    doc.text('OVERALL', margin + 153, summaryTop + 10)
+    doc.setFontSize(16); doc.setTextColor(12, 31, 63)
+    doc.text(`${exam.final_numeric_score}%`, margin + 160, summaryTop + 18, { align: 'center' })
+    
+    doc.setFontSize(8); doc.setTextColor(100, 100, 100)
+    doc.text('CEFR', margin + 158, summaryTop + 26)
+    doc.setFontSize(16); doc.setTextColor(12, 31, 63)
+    doc.text(exam.final_cefr_score || '—', margin + 160, summaryTop + 32, { align: 'center' })
+
+    // ─── 3. MODULE BREAKDOWN TABLE ───
+    const breakdownTop = 115
+    const rowH = 12
+    doc.setFillColor(248, 248, 248)
+    doc.rect(margin, breakdownTop, pageWidth - (margin * 2), rowH, 'F')
+    doc.rect(margin, breakdownTop, pageWidth - (margin * 2), rowH * 6)
+    
+    // Header
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(80, 80, 80)
+    doc.text('MODULE', margin + 5, breakdownTop + 8)
+    doc.text('GRADE', margin + 35, breakdownTop + 8)
+    doc.text('COMMENT', margin + 65, breakdownTop + 8)
+    doc.text('LEVEL', margin + 165, breakdownTop + 8)
+
+    // Data Rows
+    sections.forEach((s, idx) => {
+      const y = breakdownTop + rowH + (idx * rowH)
+      doc.line(margin, y, pageWidth - margin, y) // horizontal line
+      
+      const data = sectionScores[s]
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(20, 20, 20)
+      doc.text(s.toUpperCase(), margin + 5, y + 7.5)
+      
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9)
+      doc.text(`${data.grade}%`, margin + 38, y + 7.5)
+      
+      doc.setFontSize(7.5); doc.setTextColor(80, 80, 80)
+      const modComment = doc.splitTextToSize(data.comment, 95)
+      doc.text(modComment, margin + 65, y + 5)
+      
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(12, 31, 63)
+      doc.text(data.level, margin + 168, y + 7.5)
+    })
+
+    // Vertical lines for breakdown table
+    doc.line(margin + 30, breakdownTop, margin + 30, breakdownTop + (rowH * 6))
+    doc.line(margin + 60, breakdownTop, margin + 60, breakdownTop + (rowH * 6))
+    doc.line(margin + 160, breakdownTop, margin + 160, breakdownTop + (rowH * 6))
+
+    // ─── FOOTER ───
+    doc.setFontSize(7); doc.setTextColor(180, 180, 180)
     doc.text('This report is generated by Avilingo Aviation English Assessment Platform · avilingo.co', 105, 285, { align:'center' })
     doc.text(`Certificate issued under ICAO Doc 9835 standards · ${org?.name} · Confidential`, 105, 290, { align:'center' })
 
-    doc.save(`RoleFit-Report-${(exam.users?.full_name||'Candidate').replace(/\s+/g,'-')}.pdf`)
+    const fileName = `Avilingo-Report-${(exam.users?.full_name || 'Candidate').replace(/\s+/g, '-')}.pdf`
+    doc.save(fileName)
   }
 
   async function handleSignOut() { await supabase.auth.signOut(); router.push('/login') }
