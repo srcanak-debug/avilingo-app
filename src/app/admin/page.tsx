@@ -51,8 +51,10 @@ export default function AdminDashboard() {
   const [liveMonitor, setLiveMonitor] = useState<any>({ activeExams: 0, candidatesOnline: 0 })
   const [loading, setLoading] = useState(true)
   const [adminName, setAdminName] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
   const [adminId, setAdminId] = useState('')
   const [activeSection, setActiveSection] = useState('dashboard')
+  const [showProfile, setShowProfile] = useState(false)
 
   // Constants for V3
   const sections = ['grammar','reading','writing','speaking','listening']
@@ -180,12 +182,18 @@ export default function AdminDashboard() {
   }, [activeSection])
 
   async function checkAuth() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
-    const { data } = await supabase.from('users').select('role,full_name').eq('id', user.id).single()
-    if (data?.role !== 'super_admin') { router.push('/login'); return }
-    setAdminName(data.full_name || 'Admin')
-    setAdminId(user.id)
+    const aid = localStorage.getItem('adminId')
+    const aname = localStorage.getItem('adminName')
+    const arole = localStorage.getItem('adminRole')
+    
+    if(!aid || arole !== 'super_admin') {
+      router.push('/login')
+      return
+    }
+    
+    setAdminId(aid)
+    setAdminName(aname || 'Super Admin')
+    setAdminEmail(localStorage.getItem('adminEmail') || 'admin@domain.com')
     setLoading(false)
   }
 
@@ -694,37 +702,65 @@ export default function AdminDashboard() {
   const filteredSubRoles = selectedDepts.length ? subRoles.filter(s=>selectedDepts.includes(s.department_id)) : subRoles
 
   return (
-    <div style={{display:'flex',minHeight:'100vh',fontFamily:'var(--fb)'}}>
-      {/* Sidebar */}
-      <div style={{width:'210px',background:'var(--navy)',display:'flex',flexDirection:'column',flexShrink:0}}>
-        <div style={{padding:'18px 16px 14px',borderBottom:'1px solid rgba(255,255,255,0.08)'}}>
-          <div style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:900,color:'#fff'}}>Avil<span style={{color:'#5AAEDF'}}>ingo</span></div>
-          <div style={{fontSize:'10.5px',color:'rgba(255,255,255,0.3)',marginTop:'2px'}}>Admin Panel</div>
-        </div>
-        <nav style={{padding:'10px 8px',flex:1}}>
-          {navItems.map(item=>(
-            <button key={item.id} onClick={()=>setActiveSection(item.id)} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 12px',marginBottom:'1px',borderRadius:'7px',border:'none',cursor:'pointer',fontSize:'12.5px',fontWeight:500,background:activeSection===item.id?'rgba(58,142,208,0.2)':'transparent',color:activeSection===item.id?'#5AAEDF':'rgba(255,255,255,0.5)'}}>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div style={{padding:'10px 8px',borderTop:'1px solid rgba(255,255,255,0.08)'}}>
-          <div style={{fontSize:'11.5px',color:'rgba(255,255,255,0.35)',padding:'6px 12px'}}>{adminName}</div>
-          <button onClick={handleSignOut} style={{display:'block',width:'100%',textAlign:'left',padding:'8px 12px',borderRadius:'7px',border:'none',cursor:'pointer',fontSize:'12.5px',background:'transparent',color:'rgba(255,255,255,0.35)'}}>Sign out</button>
-        </div>
-      </div>
+    <div style={{display:'flex',flexDirection:'column',minHeight:'100vh',fontFamily:'var(--fb)',background:'var(--off)'}}>
 
-      {/* Main */}
-      <div style={{flex:1,background:'var(--off)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-        <div style={{background:'#fff',padding:'12px 24px',borderBottom:'1px solid var(--bdr)',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-          <h1 style={{fontFamily:'var(--fm)',fontSize:'17px',fontWeight:800,color:'var(--navy)',textTransform:'capitalize',margin:0}}>{activeSection==='questions'?'Question Bank':activeSection}</h1>
-          <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-            <span style={{fontSize:'11.5px',padding:'2px 8px',borderRadius:'100px',background:'#EAF3DE',color:'#27500A',fontWeight:600}}>Online</span>
-            <div style={{width:'30px',height:'30px',borderRadius:'50%',background:'var(--sky3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:700,color:'var(--sky)'}}>{adminName.charAt(0)}</div>
+      {/* ── STICKY HEADER ── */}
+      <header style={{height:'64px',background:'#fff',borderBottom:'1px solid var(--bdr)',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 24px',position:'sticky',top:0,zIndex:1000,backdropFilter:'blur(10px)',backgroundColor:'rgba(255,255,255,0.92)',flexShrink:0}}>
+        <div style={{display:'flex',alignItems:'center',gap:'32px'}}>
+          <div style={{fontFamily:'var(--fm)',fontSize:'20px',fontWeight:900,color:'var(--navy)',letterSpacing:'-0.5px'}}>Avil<span style={{color:'var(--sky)'}}>ingo</span> <span style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',marginLeft:'4px',opacity:0.6}}>ADMIN</span></div>
+          <div style={{display:'flex',alignItems:'center',gap:'4px',fontSize:'13px',fontWeight:700,color:'var(--navy)',opacity:0.75}}>
+            <span style={{fontSize:'14px'}}>📍</span> {activeSection==='questions'?'Question Bank':activeSection.charAt(0).toUpperCase()+activeSection.slice(1)}
+          </div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'6px',padding:'4px 10px',borderRadius:'20px',background:'#ECFDF5',border:'1px solid #A7F3D0'}}>
+            <span style={{width:'7px',height:'7px',borderRadius:'50%',background:'#10B981',display:'inline-block',boxShadow:'0 0 0 2px rgba(16,185,129,0.3)',animation:'pulse 2s infinite'}}></span>
+            <span style={{fontSize:'11px',fontWeight:700,color:'#059669'}}>Live</span>
+          </div>
+          <div style={{position:'relative'}}>
+            <button onClick={()=>setShowProfile(p=>!p)} style={{display:'flex',alignItems:'center',gap:'8px',padding:'5px 10px 5px 5px',borderRadius:'24px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',transition:'all 0.2s'}}>
+              <div style={{width:'30px',height:'30px',borderRadius:'50%',background:'linear-gradient(135deg,var(--sky) 0%,var(--navy) 100%)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'11px',fontWeight:800,color:'#fff'}}>{adminName.charAt(0)}</div>
+              <div style={{textAlign:'left'}}>
+                <div style={{fontSize:'12px',fontWeight:800,color:'var(--navy)',lineHeight:1.2}}>{adminName}</div>
+                <div style={{fontSize:'10px',fontWeight:600,color:'var(--t3)'}}>Super Admin</div>
+              </div>
+            </button>
+            {showProfile && (
+              <>
+                <div onClick={()=>setShowProfile(false)} style={{position:'fixed',top:0,left:0,right:0,bottom:0,zIndex:1001}} />
+                <div style={{position:'absolute',top:'calc(100% + 10px)',right:0,width:'210px',background:'#fff',borderRadius:'12px',boxShadow:'0 10px 25px -5px rgba(0,0,0,0.15)',border:'1px solid var(--bdr)',padding:'8px',zIndex:1002}}>
+                  <div style={{padding:'8px 12px',borderBottom:'1px solid var(--bdr)',marginBottom:'6px'}}>
+                    <div style={{fontSize:'12px',fontWeight:800,color:'var(--navy)'}}>{adminName}</div>
+                    <div style={{fontSize:'11px',color:'var(--t3)',wordBreak:'break-all'}}>{adminEmail}</div>
+                  </div>
+                  <button onClick={()=>{}} style={{display:'flex',alignItems:'center',gap:'8px',width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'transparent',fontSize:'12.5px',fontWeight:600,color:'var(--t2)',cursor:'pointer',textAlign:'left',fontFamily:'var(--fb)'}}>👤 Profile Settings</button>
+                  <button onClick={handleSignOut} style={{display:'flex',alignItems:'center',gap:'8px',width:'100%',padding:'10px',borderRadius:'8px',border:'none',background:'transparent',fontSize:'12.5px',fontWeight:600,color:'#ef4444',cursor:'pointer',textAlign:'left',fontFamily:'var(--fb)'}}>🔓 Sign Out</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <div style={{display:'flex',flex:1,overflow:'hidden'}}>
+        {/* Sidebar */}
+        <div style={{width:'210px',background:'var(--navy)',display:'flex',flexDirection:'column',flexShrink:0,borderRight:'1px solid rgba(255,255,255,0.05)'}}>
+          <nav style={{padding:'20px 8px',flex:1}}>
+            {navItems.map(item=>(
+              <button key={item.id} onClick={()=>setActiveSection(item.id)} style={{display:'flex',alignItems:'center',gap:'10px',width:'100%',textAlign:'left',padding:'10px 14px',marginBottom:'2px',borderRadius:'8px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:600,background:activeSection===item.id?'rgba(255,255,255,0.08)':'transparent',color:activeSection===item.id?'#fff':'rgba(255,255,255,0.4)',transition:'all 0.2s',fontFamily:'var(--fb)'}}>
+                <span style={{fontSize:'16px',opacity:activeSection===item.id?1:0.6}}>{item.id==='dashboard'?'📊':item.id==='questions'?'📚':item.id==='users'?'👥':item.id==='organizations'?'🏢':item.id==='templates'?'📋':item.id==='evaluator'?'✍️':item.id==='reports'?'📈':item.id==='invoices'?'💰':item.id==='audit'?'📜':'🔹'}</span>
+                {item.label}
+              </button>
+            ))}
+          </nav>
+          <div style={{padding:'16px',borderTop:'1px solid rgba(255,255,255,0.05)',textAlign:'center'}}>
+            <div style={{fontSize:'10px',fontWeight:800,color:'rgba(255,255,255,0.2)',letterSpacing:'1px',textTransform:'uppercase'}}>v3.1.0</div>
           </div>
         </div>
 
-        <div style={{padding:'20px 24px',flex:1,overflowY:'auto'}}>
+        {/* Main Content */}
+        <div style={{flex:1,background:'var(--off)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          <div style={{padding:'20px 24px',flex:1,overflowY:'auto'}}>
 
           {/* ── DASHBOARD ── */}
           {/* ── DASHBOARD V3: ACTION CENTER ── */}
@@ -1675,9 +1711,10 @@ export default function AdminDashboard() {
                   )}
                 </div>
               ) : null}
-            </div>
+            </div>{/* end drawer content scroll area */}
 
             {/* Drawer Footer */}
+
             <div style={{padding:'20px 24px',borderTop:'1px solid var(--bdr)',background:'#fafafa',display:'flex',justifyContent:'flex-end',gap:'10px'}}>
               <button onClick={()=>{setShowForm(false);setDetailQ(null);setShowTemplateForm(false);setEditTemplate(null);setShowUserForm(false);setDetailUser(null);setShowOrgForm(false);setDetailOrg(null);setOrgStep(1);setQStep(1);resetForm();}} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'13px',fontWeight:600,color:'var(--t2)',cursor:'pointer'}}>Close</button>
               
@@ -1706,6 +1743,8 @@ export default function AdminDashboard() {
           </div>
         </>
       )}
-    </div>
+        </div>
+      </div>
   )
+
 }
