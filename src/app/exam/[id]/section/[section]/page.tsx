@@ -468,16 +468,11 @@ export default function ExamSectionPage() {
     if (p.length >= 2) { const pass = p[0].trim(), r = p.slice(1).join('\n\n').trim(), {qT,opts} = parseOpts(r); return {pass,qT:qT||r,opts} }
     const {qT,opts} = parseOpts(raw); return {pass:'',qT,opts}
   }
-  // For listening: we only need the options. Questions/transcript are hidden.
+  // For listening: hide the [AUDIO] "transcript" but show the question and options
   function parseListening(c: string) {
-    const raw = norm(c)
-    const parts = raw.split('\n')
-    const opts: {letter:string;text:string}[] = []
-    for (const l of parts) {
-      const m = l.trim().match(/^(?:Option|Seçenek|Opsiyon)?\s*([A-D])[.)]\s*(.+)/i)
-      if (m) opts.push({letter:m[1].toUpperCase(),text:m[2]})
-    }
-    return { qT: '', opts }
+    const raw = norm(c);
+    const noTranscript = raw.replace(/\[AUDIO\]\s*"[^"]*"\s*\n*/gi, '');
+    return parseOpts(noTranscript);
   }
 
   /* ═══ LOADING ═══ */
@@ -649,16 +644,23 @@ export default function ExamSectionPage() {
                 </div>}
                 {lstPhase==='answer' && <div style={{background:'#F0F9FF',borderRadius:'8px',padding:'12px',border:'1px solid #BAE6FD',fontSize:'13px',color:'#0369A1'}}>🔒 Audio has been played. Replay is not permitted.</div>}
               </div>}
-              {section !== 'listening' && p.qT ? <div style={{background:BRAND.off,borderRadius:'10px',padding:'20px',marginBottom:'18px',border:`1px solid ${BRAND.border}`,fontSize:'16px',color:BRAND.text1,lineHeight:1.8,whiteSpace:'pre-wrap'}}>{p.qT}</div> : null}
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-                {(p.opts.length>0?p.opts:[{letter:'A',text:'Option A'},{letter:'B',text:'Option B'},{letter:'C',text:'Option C'},{letter:'D',text:'Option D'}]).map(o => {
-                  const sel = answers[cq.id]===o.letter
-                  return <button key={o.letter} onClick={() => handleAns(cq.id,o.letter)} style={{padding:'16px 18px',borderRadius:'12px',border:`2px solid ${sel?SC[section]:BRAND.border}`,background:sel?SC[section]+'10':BRAND.white,color:BRAND.text1,fontSize:'15px',cursor:'pointer',textAlign:'left',display:'flex',gap:'12px',alignItems:'center',transition:'all 0.15s'}}>
-                    <span style={{width:'28px',height:'28px',borderRadius:'50%',border:`2px solid ${sel?SC[section]:'#D1D5DB'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px',fontWeight:800,flexShrink:0,background:sel?SC[section]:'transparent',color:sel?'#fff':BRAND.text3}}>{sel?'✓':o.letter}</span>
-                    <span><strong style={{fontWeight:600}}>{o.letter}.</strong> {o.text}</span>
-                  </button>
-                })}
-              </div>
+              {p.qT ? <div style={{background:BRAND.off,borderRadius:'10px',padding:'20px',marginBottom:'18px',border:`1px solid ${BRAND.border}`,fontSize:'16px',color:BRAND.text1,lineHeight:1.8,whiteSpace:'pre-wrap'}}>{p.qT}</div> : null}
+              {cq.type === 'fill_blank' ? (
+                <div style={{marginTop: '16px'}}>
+                  <label style={{fontSize:'14px', fontWeight:600, color:BRAND.text2, display:'block', marginBottom:'8px'}}>Your Answer:</label>
+                  <input type="text" value={answers[cq.id] || ''} onChange={(e) => handleAns(cq.id, e.target.value)} style={{width:'100%', padding:'14px 16px', borderRadius:'10px', border:`2px solid ${BRAND.border}`, fontSize:'16px', outline:'none', color:BRAND.text1}} placeholder="Type the missing word(s)..." />
+                </div>
+              ) : (
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+                  {(p.opts.length>0?p.opts:[{letter:'A',text:'Option A'},{letter:'B',text:'Option B'},{letter:'C',text:'Option C'},{letter:'D',text:'Option D'}]).map(o => {
+                    const sel = answers[cq.id]===o.letter
+                    return <button key={o.letter} onClick={() => handleAns(cq.id,o.letter)} style={{padding:'16px 18px',borderRadius:'12px',border:`2px solid ${sel?SC[section]:BRAND.border}`,background:sel?SC[section]+'10':BRAND.white,color:BRAND.text1,fontSize:'15px',cursor:'pointer',textAlign:'left',display:'flex',gap:'12px',alignItems:'center',transition:'all 0.15s'}}>
+                      <span style={{width:'28px',height:'28px',borderRadius:'50%',border:`2px solid ${sel?SC[section]:'#D1D5DB'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px',fontWeight:800,flexShrink:0,background:sel?SC[section]:'transparent',color:sel?'#fff':BRAND.text3}}>{sel?'✓':o.letter}</span>
+                      <span><strong style={{fontWeight:600}}>{o.letter}.</strong> {o.text}</span>
+                    </button>
+                  })}
+                </div>
+              )}
               {answerSaving && <div style={{textAlign:'center',marginTop:'12px',fontSize:'13px',color:BRAND.text3}}>↻ Your answer is being saved...</div>}
             </div>
           })()}
