@@ -72,12 +72,17 @@ export default function CandidateDashboard() {
                 </div>
 
                 {exam.status === 'certified' && exam.final_cefr_score && (
-                  <div style={{background:'rgba(26,209,138,0.1)',borderRadius:'8px',padding:'12px 16px',marginBottom:'14px',display:'flex',alignItems:'center',gap:'12px'}}>
-                    <span style={{fontSize:'24px',fontWeight:800,color:'#1AD18A',fontFamily:'var(--fm)'}}>{exam.final_cefr_score}</span>
-                    <div>
-                      <div style={{fontSize:'13px',fontWeight:600,color:'#fff'}}>ICAO Certified</div>
-                      <div style={{fontSize:'12px',color:'rgba(255,255,255,0.4)'}}>Certificate issued</div>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(26,209,138,0.1)',borderRadius:'8px',padding:'12px 16px',marginBottom:'14px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                      <span style={{fontSize:'24px',fontWeight:800,color:'#1AD18A',fontFamily:'var(--fm)'}}>{exam.final_cefr_score}</span>
+                      <div>
+                        <div style={{fontSize:'13px',fontWeight:600,color:'#fff'}}>ICAO Certified</div>
+                        <div style={{fontSize:'12px',color:'rgba(255,255,255,0.4)'}}>Certificate issued</div>
+                      </div>
                     </div>
+                    <button onClick={() => router.push(`/exam/${exam.id}/result`)} style={{padding:'8px 16px',borderRadius:'8px',border:'1px solid rgba(26,209,138,0.3)',background:'transparent',color:'#1AD18A',fontSize:'13px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',transition:'all 0.2s'}}>
+                      View Results →
+                    </button>
                   </div>
                 )}
 

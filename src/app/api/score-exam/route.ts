@@ -1,7 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextRequest, NextResponse } from 'next/server'
+import { Resend } from 'resend'
 
 export const dynamic = 'force-dynamic'
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
+
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -108,6 +112,33 @@ export async function POST(req: NextRequest) {
       cefr_overall: cefrLevel,
       issued_at: new Date().toISOString()
     }, { onConflict: 'exam_id' })
+
+    // Send automated email to candidate
+    if (resend && candidateData?.email) {
+      try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.avilingo.co'
+        const resultLink = `${appUrl}/exam/${examId}/result`
+        await resend.emails.send({
+          from: 'Avilingo <no-reply@avilingo.co>',
+          to: candidateData.email,
+          subject: 'Your Avilingo Evaluation Results are Ready!',
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+              <h2 style="color: #0A1628;">Evaluation Completed</h2>
+              <p>Hello ${candidateData.full_name || 'Candidate'},</p>
+              <p>Your recent aviation English assessment has been graded by our human evaluators.</p>
+              <p>Your official CEFR score and detailed feedback are now available.</p>
+              <div style="margin: 30px 0;">
+                <a href="${resultLink}" style="background-color: #3A8ED0; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">View Your Results</a>
+              </div>
+              <p>Best regards,<br>The Avilingo Team</p>
+            </div>
+          `
+        })
+      } catch (err) {
+        console.error('Failed to send result email:', err)
+      }
+    }
 
     return NextResponse.json({
       success: true,
