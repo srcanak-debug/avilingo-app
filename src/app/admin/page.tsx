@@ -1254,6 +1254,10 @@ export default function AdminDashboard() {
                         <span>Contract Ends:</span>
                         <span style={{color:new Date(o.contract_end_date) < new Date() ? '#ef4444' : 'var(--navy)'}}>{o.contract_end_date ? new Date(o.contract_end_date).toLocaleDateString() : '---'}</span>
                       </div>
+                      <div style={{display:'flex',gap:'8px',marginTop:'12px',borderTop:'1px solid var(--bdr)',paddingTop:'12px'}}>
+                        <button onClick={(e)=>{e.stopPropagation();startEditOrg(o);setOrgStep(1)}} style={{flex:1,padding:'6px',borderRadius:'6px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'11px',fontWeight:700,color:'var(--navy)',cursor:'pointer',fontFamily:'var(--fb)'}}>Edit</button>
+                        <button onClick={(e)=>{e.stopPropagation();startSingleDeleteOrg(o)}} style={{padding:'6px 12px',borderRadius:'6px',border:'1.5px solid #FECACA',background:'#FEF2F2',fontSize:'11px',fontWeight:700,color:'#DC2626',cursor:'pointer',fontFamily:'var(--fb)'}}>Delete</button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1686,8 +1690,18 @@ export default function AdminDashboard() {
               {(showTemplateForm || showUserForm || (showOrgForm && orgStep === 2) || (showForm && qStep === 3)) && <button onClick={showTemplateForm?saveTemplate:showUserForm?saveUser:showOrgForm?saveOrg:saveQuestion} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Save Changes</button>}
               
               {detailQ && !showForm && <button onClick={()=>{startEdit(detailQ);setQStep(1);setDetailQ(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit This Question</button>}
-              {detailUser && !showUserForm && <button onClick={()=>{startEditUser(detailUser);setDetailUser(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit Profile</button>}
-              {detailOrg && !showOrgForm && <button onClick={()=>{startEditOrg(detailOrg);setOrgStep(1);setDetailOrg(null)}} style={{padding:'10px 30px',borderRadius:'8px',border:'none',background:'var(--sky)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit Organization</button>}
+              {detailUser && !showUserForm && (
+                <div style={{display:'flex',gap:'10px'}}>
+                  <button onClick={()=>{startEditUser(detailUser);setShowUserForm(true);setDetailUser(null)}} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit User</button>
+                  <button onClick={()=>startSingleDeleteUser(detailUser)} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid #FECACA',background:'#FEF2F2',color:'#DC2626',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Delete</button>
+                </div>
+              )}
+              {detailOrg && !showOrgForm && (
+                <div style={{display:'flex',gap:'10px'}}>
+                  <button onClick={()=>{startEditOrg(detailOrg);setOrgStep(1);setDetailOrg(null)}} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Edit Organization</button>
+                  <button onClick={()=>startSingleDeleteOrg(detailOrg)} style={{padding:'10px 20px',borderRadius:'8px',border:'1.5px solid #FECACA',background:'#FEF2F2',color:'#DC2626',fontSize:'13px',fontWeight:700,cursor:'pointer'}}>Delete</button>
+                </div>
+              )}
             </div>
           </div>
         </>
