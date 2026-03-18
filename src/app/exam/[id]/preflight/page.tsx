@@ -163,39 +163,47 @@ export default function PreflightPage() {
 
   // Start exam - go directly to first section with loading transition
   async function startExam() {
-    setShowLoading(true)
-    // Stop camera stream
-    cameraStream?.getTracks().forEach(t => t.stop())
-    
-    // Load exam data for section routing
-    const { data: ed } = await supabase.from('exams').select('*,exam_templates(*)').eq('id', examId).single()
-    if (!ed) { router.push('/exam'); return }
-    
-    // Update exam status
-    if (ed.status === 'pending') {
-      await supabase.from('exams').update({
-        status: 'in_progress',
-        started_at: new Date().toISOString()
-      }).eq('id', examId)
+    try {
+      setShowLoading(true)
+      // Stop camera stream
+      cameraStream?.getTracks().forEach(t => t.stop())
+      
+      // Load exam data for section routing
+      const { data: ed, error: edErr } = await supabase.from('exams').select('*,exam_templates(*)').eq('id', examId).single()
+      if (edErr) { console.error('Start Exam Error:', edErr); return router.push('/exam'); }
+      if (!ed) { router.push('/exam'); return }
+      
+      // Update exam status
+      if (ed.status === 'pending') {
+        const { error: updErr } = await supabase.from('exams').update({
+          status: 'in_progress',
+          started_at: new Date().toISOString()
+        }).eq('id', examId)
+        if (updErr) console.error('Update Exam Error:', updErr)
+      }
+      
+      // Determine first section
+      const ROLE_SECTION_ORDER: Record<string, string[]> = {
+        general: ['grammar','reading','listening','writing','speaking'],
+        flight_deck: ['grammar','reading','listening','writing','speaking'],
+        cabin_crew: ['grammar','listening','reading','speaking','writing'],
+        atc: ['grammar','listening','reading','speaking','writing'],
+        maintenance: ['grammar','reading','writing','listening','speaking'],
+        ground_staff: ['grammar','reading','listening','writing','speaking'],
+      }
+      const template = ed.exam_templates
+      const role = template?.role_profile || 'general'
+      const sectionOrder = ROLE_SECTION_ORDER[role] || ROLE_SECTION_ORDER.general
+      const firstSection = sectionOrder.find((s: string) => (template?.[`${s}_count`] || 0) > 0) || sectionOrder[0]
+      
+      // Brief loading pause for UX
+      await new Promise(r => setTimeout(r, 3500))
+      router.push(`/exam/${examId}/section/${firstSection}`)
+    } catch (err: any) {
+      console.error('Fatal startExam error:', err)
+      alert('Sistem Yüklenirken Hata Oluştu / Start Exam Error:\n' + (err.message || String(err)))
+      setShowLoading(false)
     }
-    
-    // Determine first section
-    const ROLE_SECTION_ORDER: Record<string, string[]> = {
-      general: ['grammar','reading','listening','writing','speaking'],
-      flight_deck: ['grammar','reading','listening','writing','speaking'],
-      cabin_crew: ['grammar','listening','reading','speaking','writing'],
-      atc: ['grammar','listening','reading','speaking','writing'],
-      maintenance: ['grammar','reading','writing','listening','speaking'],
-      ground_staff: ['grammar','reading','listening','writing','speaking'],
-    }
-    const template = ed.exam_templates
-    const role = template.role_profile || 'general'
-    const sectionOrder = ROLE_SECTION_ORDER[role] || ROLE_SECTION_ORDER.general
-    const firstSection = sectionOrder.find((s: string) => (template[`${s}_count`] || 0) > 0) || sectionOrder[0]
-    
-    // Brief loading pause for UX
-    await new Promise(r => setTimeout(r, 3500))
-    router.push(`/exam/${examId}/section/${firstSection}`)
   }
 
   const allPassed = completedCount === 5

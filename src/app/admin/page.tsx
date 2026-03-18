@@ -67,6 +67,7 @@ export default function AdminDashboard() {
   const [qStatus, setQStatus] = useState('active')
   const [qTag, setQTag] = useState('')
   const [qSort, setQSort] = useState('newest')
+  const [qRole, setQRole] = useState('all')
   const [filtersPending, setFiltersPending] = useState(false)
 
   // Form
@@ -78,7 +79,7 @@ export default function AdminDashboard() {
   const [formQ, setFormQ] = useState({
     section:'grammar', type:'multiple_choice', content:'',
     correct_answer:'', cefr_level:'B1', difficulty:'medium',
-    competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true
+    competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general'
   })
   const [options, setOptions] = useState([
     {text:'',is_correct:false},{text:'',is_correct:false},
@@ -171,6 +172,7 @@ export default function AdminDashboard() {
     const search = overrides.search ?? qSearch
     const tag = overrides.tag ?? qTag
     const sort = overrides.sort ?? qSort
+    const role = overrides.role ?? qRole
     const pageSize = overrides.pageSize ?? qPageSize
 
     let query = supabase
@@ -186,6 +188,7 @@ export default function AdminDashboard() {
     if (status === 'inactive') query = query.eq('active', false)
     if (search) query = query.ilike('content', `%${search}%`)
     if (tag) query = query.ilike('competency_tag', `%${tag}%`)
+    if (role !== 'all') query = query.eq('role_tag', role)
 
     if (sort === 'newest') query = query.order('created_at', {ascending:false})
     else if (sort === 'oldest') query = query.order('created_at', {ascending:true})
@@ -274,14 +277,14 @@ export default function AdminDashboard() {
 
   function startEdit(q: any) {
     setEditQ(q)
-    setFormQ({ section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'', cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'', aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', image_url:q.image_url||'', active:q.active })
+    setFormQ({ section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'', cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'', aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', image_url:q.image_url||'', active:q.active, role_tag:q.role_tag||'general' })
     setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}])
     setRubrics([]); setShowForm(true); setDetailQ(null)
   }
 
   function resetForm() {
     setShowForm(false); setEditQ(null)
-    setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true })
+    setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general' })
     setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}])
     setRubrics([]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([])
   }
@@ -532,7 +535,7 @@ export default function AdminDashboard() {
               <div style={{background:'#fff',borderRadius:'12px',padding:'20px',border:'1px solid var(--bdr)'}}>
                 <h3 style={{fontFamily:'var(--fm)',fontSize:'14px',fontWeight:800,color:'var(--navy)',marginBottom:'12px'}}>Quick Actions</h3>
                 <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-                  {[{label:'Question Bank',s:'questions'},{label:'AI Import',s:'questions',ai:true},{label:'Bulk Import',href:'/admin/import'},{label:'Exam Templates',s:'templates'},{label:'Users',href:'/admin/users'},{label:'Reports',href:'/admin/reports'}].map(a=>(
+                  {[{label:'Question Bank',s:'questions'},{label:'AI Import',s:'questions',ai:true},{label:'Bulk Import',href:'/admin/import'},{label:'Exam Wizard',href:'/admin/exam-wizard'},{label:'Exam Templates',s:'templates'},{label:'Users',href:'/admin/users'},{label:'Reports',href:'/admin/reports'}].map(a=>(
                     a.href
                       ? <a key={a.label} href={a.href} style={{padding:'7px 13px',borderRadius:'7px',border:'1.5px solid var(--bdr)',background:'#fff',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',textDecoration:'none',display:'inline-block'}}>{a.label} →</a>
                       : <button key={a.label} onClick={()=>{setActiveSection(a.s??'questions');if(a.ai)setTimeout(()=>setShowAI(true),100)}} style={{padding:'7px 13px',borderRadius:'7px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'12.5px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>{a.label} →</button>
@@ -651,7 +654,7 @@ export default function AdminDashboard() {
                     </div>
                     {editQ&&<div style={{padding:'7px 10px',background:'#FAEEDA',borderRadius:'6px',fontSize:'12px',color:'#633806',marginBottom:'12px'}}>⚠️ If used in past exams, editing creates V{(editQ.version_number||1)+1}.</div>}
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px',marginBottom:'10px'}}>
-                      {[{label:'Section',key:'section',opts:sections.map(s=>({v:s,l:s.charAt(0).toUpperCase()+s.slice(1)}))},{label:'Type',key:'type',opts:[{v:'multiple_choice',l:'Multiple Choice'},{v:'fill_blank',l:'Fill in Blank'},{v:'audio_response',l:'Audio Response'},{v:'written_response',l:'Written Response'},{v:'listening',l:'Listening'},{v:'picture_description',l:'Picture'}]},{label:'CEFR',key:'cefr_level',opts:cefrLevels.map(l=>({v:l,l}))},{label:'Difficulty',key:'difficulty',opts:[{v:'easy',l:'Easy'},{v:'medium',l:'Medium'},{v:'hard',l:'Hard'}]},{label:'Competency Tag',key:'competency_tag',isSelect:true},{label:'Aircraft Context',key:'aircraft_context',isInput:true,placeholder:'A320, B737...'}].map((f:any)=>(
+                      {[{label:'Section',key:'section',opts:sections.map(s=>({v:s,l:s.charAt(0).toUpperCase()+s.slice(1)}))},{label:'Type',key:'type',opts:[{v:'multiple_choice',l:'Multiple Choice'},{v:'fill_blank',l:'Fill in Blank'},{v:'audio_response',l:'Audio Response'},{v:'written_response',l:'Written Response'},{v:'listening',l:'Listening'},{v:'picture_description',l:'Picture'}]},{label:'CEFR',key:'cefr_level',opts:cefrLevels.map(l=>({v:l,l}))},{label:'Difficulty',key:'difficulty',opts:[{v:'easy',l:'Easy'},{v:'medium',l:'Medium'},{v:'hard',l:'Hard'}]},{label:'Role Tag',key:'role_tag',opts:[{v:'general',l:'General (all roles)'},{v:'flight_deck',l:'Flight Deck'},{v:'cabin_crew',l:'Cabin Crew'},{v:'atc',l:'ATC'},{v:'maintenance',l:'Maintenance'},{v:'ground_staff',l:'Ground Staff'}]},{label:'Competency Tag',key:'competency_tag',isSelect:true},{label:'Aircraft Context',key:'aircraft_context',isInput:true,placeholder:'A320, B737...'}].map((f:any)=>(
                         <div key={f.key}>
                           <label style={{fontSize:'11px',fontWeight:600,color:'var(--t2)',display:'block',marginBottom:'3px'}}>{f.label}</label>
                           {f.isInput
@@ -835,6 +838,7 @@ export default function AdminDashboard() {
                               <td style={{padding:'9px 12px',maxWidth:'210px'}}>
                                 <div style={{fontSize:'12.5px',color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',cursor:'pointer'}} onClick={()=>setDetailQ(q)}>{q.content}</div>
                                 <div style={{display:'flex',gap:'4px',marginTop:'2px'}}>
+                                  {q.role_tag&&q.role_tag!=='general'&&<span style={{fontSize:'9.5px',fontWeight:700,padding:'1px 5px',borderRadius:'3px',background:'#F5F3FF',color:'#7C3AED'}}>{q.role_tag.replace(/_/g,' ')}</span>}
                                   {q.competency_tag&&<span style={{fontSize:'10px',color:'var(--t3)'}}>{q.competency_tag.replace(/_/g,' ')}</span>}
                                   {q.version_number>1&&<span style={{fontSize:'9.5px',fontWeight:700,padding:'1px 4px',borderRadius:'3px',background:'#E0E7FF',color:'#3730A3'}}>V{q.version_number}</span>}
                                 </div>
@@ -891,7 +895,7 @@ export default function AdminDashboard() {
               <div style={{background:'#fff',borderRadius:'12px',padding:'16px',border:'1px solid var(--bdr)',position:'sticky',top:'20px'}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
                   <h3 style={{fontFamily:'var(--fm)',fontSize:'13.5px',fontWeight:800,color:'var(--navy)',margin:0}}>🔍 Filter & Sort</h3>
-                  <button onClick={()=>{setQSection('all');setQCefr('all');setQDifficulty('all');setQStatus('active');setQSearch('');setQTag('');setQSort('newest');setQPage(0);runQuery(0,{section:'all',cefr:'all',difficulty:'all',status:'active',search:'',tag:'',sort:'newest'})}} style={{padding:'3px 8px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11px',color:'var(--t3)',fontFamily:'var(--fb)'}}>Reset</button>
+                  <button onClick={()=>{setQSection('all');setQCefr('all');setQDifficulty('all');setQStatus('active');setQSearch('');setQTag('');setQSort('newest');setQRole('all');setQPage(0);runQuery(0,{section:'all',cefr:'all',difficulty:'all',status:'active',search:'',tag:'',sort:'newest',role:'all'})}} style={{padding:'3px 8px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11px',color:'var(--t3)',fontFamily:'var(--fb)'}}>Reset</button>
                 </div>
 
                 <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
@@ -941,6 +945,15 @@ export default function AdminDashboard() {
                   </div>
 
                   <div>
+                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'5px'}}>🎭 Role Tag</label>
+                    <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
+                      {[['all','All Roles'],['general','General'],['flight_deck','Flight Deck'],['cabin_crew','Cabin Crew'],['atc','ATC'],['maintenance','Maintenance'],['ground_staff','Ground Staff']].map(([v,l])=>(
+                        <button key={v} onClick={()=>{setQRole(v);setFiltersPending(true)}} style={{padding:'5px 10px',borderRadius:'6px',border:'1.5px solid',borderColor:qRole===v?'#7C3AED':'var(--bdr)',background:qRole===v?'#F5F3FF':'#fff',color:qRole===v?'#7C3AED':'var(--t2)',fontSize:'12px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',textAlign:'left'}}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
                     <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'5px'}}>🏷️ Competency Tag</label>
                     <input value={qTag} onChange={e=>{setQTag(e.target.value);setFiltersPending(true)}} placeholder="e.g. phraseology" style={{...inp({width:'100%',fontSize:'12px'})}} />
                   </div>
@@ -968,7 +981,7 @@ export default function AdminDashboard() {
             <div>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'18px'}}>
                 <div><h2 style={{fontFamily:'var(--fm)',fontSize:'15px',fontWeight:800,color:'var(--navy)',margin:0,marginBottom:'2px'}}>Exam Templates</h2><p style={{fontSize:'12px',color:'var(--t3)',margin:0}}>Configure section order, counts, weights and timers.</p></div>
-                <button onClick={()=>{setShowTemplateForm(true);setEditTemplate(null);setNewTemplate({name:'',role_profile:'general',grammar_count:15,reading_count:5,writing_count:3,speaking_count:4,listening_count:8,weight_grammar:10,weight_reading:20,weight_writing:20,weight_speaking:40,weight_listening:10,time_limit_mins:90,writing_timer_mins:3.5,speaking_attempts:3,listening_single_play:true,passing_cefr:'B2',proctoring_enabled:true,attempts_allowed:1,org_id:null,prep_grammar:DEFAULT_PREP.grammar,prep_reading:DEFAULT_PREP.reading,prep_writing:DEFAULT_PREP.writing,prep_speaking:DEFAULT_PREP.speaking,prep_listening:DEFAULT_PREP.listening} as any)}} style={{padding:'9px 16px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)'}}>+ New Template</button>
+                <a href="/admin/exam-wizard" style={{padding:'9px 16px',borderRadius:'8px',border:'none',background:'var(--navy)',color:'#fff',fontSize:'12.5px',fontWeight:600,cursor:'pointer',fontFamily:'var(--fb)',textDecoration:'none',display:'inline-block'}}>+ New Exam (Wizard)</a>
               </div>
               {showTemplateForm&&(
                 <div style={{background:'#fff',borderRadius:'12px',padding:'22px',border:'2px solid var(--sky)',marginBottom:'18px'}}>
@@ -1085,7 +1098,7 @@ export default function AdminDashboard() {
                       </div>
                       <div style={{display:'flex',gap:'5px'}}>
                         <button onClick={()=>duplicateTemplate(t)} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'var(--t2)',fontFamily:'var(--fb)'}}>Copy</button>
-                        <button onClick={()=>startEditTemplate(t)} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)'}}>Edit</button>
+                        <a href={`/admin/exam-wizard?edit=${t.id}`} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)',textDecoration:'none'}}>Edit</a>
                         <button onClick={()=>deleteTemplate(t.id)} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'#DC2626',fontFamily:'var(--fb)'}}>Delete</button>
                       </div>
                     </div>
