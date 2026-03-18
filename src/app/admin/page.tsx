@@ -331,29 +331,53 @@ export default function AdminDashboard() {
     setShowDelConfirm(true)
   }
 
+  function startSingleDeleteTemplate(t: any) {
+    setDelItems([{ ...t, _id:t.id, _type:'template', _display:t.name }])
+    setDelInput('')
+    setShowDelConfirm(true)
+  }
+
+  function startSingleDeleteUser(u: any) {
+    setDelItems([{ ...u, _id:u.id, _type:'user', _display:u.full_name }])
+    setDelInput('')
+    setShowDelConfirm(true)
+  }
+
+  function startSingleDeleteOrg(o: any) {
+    setDelItems([{ ...o, _id:o.id, _type:'org', _display:o.name }])
+    setDelInput('')
+    setShowDelConfirm(true)
+  }
+
   async function finalDelete() {
     if (delItems.length > 5 && delInput !== 'DELETE') return
     setQLoading(true)
-    const ids = delItems.map(i=>i.id)
-    
-    // Check if used in exams (safety check)
-    const { data: used } = await supabase.from('exam_answers').select('question_id').in('question_id', ids)
-    const usedIds = new Set(used?.map(u=>u.question_id) || [])
-    
-    const toSoftDelete = ids.filter(id => usedIds.has(id))
-    const toHardDelete = ids.filter(id => !usedIds.has(id))
+    const ids = delItems.map(i=>i._id || i.id) 
+    const type = delItems[0]?._type || 'question'
 
-    if (toSoftDelete.length) {
-      await supabase.from('questions').update({ active:false, is_latest:false }).in('id', toSoftDelete)
-    }
-    if (toHardDelete.length) {
-      await supabase.from('questions').delete().in('id', toHardDelete)
+    if (type === 'question') {
+      const { data: used } = await supabase.from('exam_answers').select('question_id').in('question_id', ids)
+      const usedIds = new Set(used?.map(u=>u.question_id) || [])
+      const toSoftDelete = ids.filter(id => usedIds.has(id))
+      const toHardDelete = ids.filter(id => !usedIds.has(id))
+      if (toSoftDelete.length) await supabase.from('questions').update({ active:false }).in('id', toSoftDelete)
+      if (toHardDelete.length) await supabase.from('questions').delete().in('id', toHardDelete)
+      runQuery(qPage)
+    } else if (type === 'user') {
+      await supabase.from('users').delete().in('id', ids)
+      loadUsers()
+    } else if (type === 'org') {
+      await supabase.from('organizations').delete().in('id', ids)
+      loadOrgs()
+    } else if (type === 'template') {
+      await supabase.from('exam_templates').delete().in('id', ids)
+      loadTemplates()
     }
 
     setShowDelConfirm(false)
     setDelItems([])
-    setSelectedQIds([])
-    runQuery(qPage)
+    setDelInput('')
+    setQLoading(false)
     loadStats()
   }
 
@@ -1130,7 +1154,7 @@ export default function AdminDashboard() {
                       <div style={{display:'flex',gap:'5px'}}>
                         <button onClick={()=>duplicateTemplate(t)} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'var(--t2)',fontFamily:'var(--fb)'}}>Copy</button>
                         <a href={`/admin/exam-wizard?edit=${t.id}`} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid var(--bdr)',background:'#fff',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'var(--navy)',fontFamily:'var(--fb)',textDecoration:'none'}}>Edit</a>
-                        <button onClick={()=>deleteTemplate(t.id)} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'#DC2626',fontFamily:'var(--fb)'}}>Delete</button>
+                        <button onClick={()=>startSingleDeleteTemplate(t)} style={{padding:'4px 10px',borderRadius:'5px',border:'1.5px solid #FECACA',background:'#FEF2F2',cursor:'pointer',fontSize:'11px',fontWeight:600,color:'#DC2626',fontFamily:'var(--fb)'}}>Delete</button>
                       </div>
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'6px'}}>
@@ -1250,12 +1274,14 @@ export default function AdminDashboard() {
           <div style={{background:'#fff',borderRadius:'16px',width:'440px',padding:'24px',boxShadow:'0 20px 25px -5px rgba(0,0,0,0.1)'}}>
             <div style={{fontSize:'32px',marginBottom:'16px'}}>⚠️</div>
             <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'8px'}}>
-              {delItems.length === 1 ? 'Delete Question?' : `Delete ${delItems.length} Questions?`}
+              {delItems.length === 1 
+                ? `Delete ${((delItems[0] as any)._type || 'question').charAt(0).toUpperCase() + ((delItems[0] as any)._type || 'question').slice(1)}?` 
+                : `Delete ${delItems.length} Items?`}
             </h3>
             <p style={{fontSize:'14px',color:'var(--t3)',lineHeight:1.5,marginBottom:'20px'}}>
               {delItems.length === 1 
-                ? 'Are you sure you want to remove this question? This action might be irreversible if the question hasn\'t been used in exams.'
-                : `You are about to delete ${delItems.length} questions. This will affect question bank statistics and future exam generation.`}
+                ? `Are you sure you want to remove "${(delItems[0] as any)._display || 'this item'}"? This action cannot be undone.`
+                : `You are about to delete ${delItems.length} items. This action is permanent and may affect related data.`}
             </p>
             
             {delItems.length > 5 && (
