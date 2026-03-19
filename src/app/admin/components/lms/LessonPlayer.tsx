@@ -148,7 +148,9 @@ export default function LessonPlayer() {
                   </div>
                   <div style={{ color: '#fff', fontSize: '13px', fontWeight: 700, marginBottom: '4px' }}>{res.title}</div>
                   <div style={{ color: '#64748b', fontSize: '11px', marginBottom: '12px' }}>{res.description}</div>
-                  <button style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>Download Asset</button>
+                  <a href={res.url} download target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                    <button style={{ width: '100%', padding: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: '11px', fontWeight: 700, cursor: 'pointer' }}>Download Asset</button>
+                  </a>
                 </div>
               ))}
             </div>
