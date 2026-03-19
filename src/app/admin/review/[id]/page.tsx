@@ -23,6 +23,9 @@ export default function AdminExamReviewPage() {
   const [grades, setGrades] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('overview')
+  const [observations, setObservations] = useState<{photos: any[], violations: any[]}>({ photos: [], violations: [] })
+  const [gradingForm, setGradingForm] = useState<Record<string, { score: number, feedback: string }>>({})
+  const [savingGrade, setSavingGrade] = useState<string | null>(null)
 
   useEffect(() => { checkAuth() }, [])
   useEffect(() => { if (adminUser) loadReview() }, [adminUser])
@@ -38,15 +41,19 @@ export default function AdminExamReviewPage() {
   }
 
   async function loadReview() {
-    const [
-      { data: examData },
-      { data: answerData },
-      { data: gradeData }
-    ] = await Promise.all([
+    const results = await Promise.all([
       supabase.from('exams').select('*,exam_templates(*),users!exams_candidate_id_fkey(full_name,email,organizations(name))').eq('id', examId).single(),
       supabase.from('exam_answers').select('*,questions(*)').eq('exam_id', examId),
-      supabase.from('grades').select('*,grade_details(*)').eq('exam_id', examId)
+      supabase.from('grades').select('*,grade_details(*)').eq('exam_id', examId),
+      supabase.from('proctoring_events').select('*').eq('exam_id', examId).order('captured_at'),
+      supabase.from('violations').select('*').eq('exam_id', examId).order('occurred_at')
     ])
+
+    const examData = results[0].data as any
+    const answerData = results[1].data as any[]
+    const gradeData = results[2].data as any[]
+    const photoData = results[3].data as any[]
+    const violationData = results[4].data as any[]
 
     if (!examData) { router.push('/admin'); return }
     
@@ -62,9 +69,76 @@ export default function AdminExamReviewPage() {
 
     setExam(examData)
     setAnswers(answerData || [])
-    // Map grades to answers if possible
     setGrades(gradeData || [])
+    setObservations({ photos: photoData || [], violations: violationData || [] })
+    
+    // Initialize grading form
+    const initialGrading: any = {}
+    gradeData?.forEach(g => {
+      initialGrading[g.section] = { score: g.numeric_score, feedback: g.feedback }
+    })
+    setGradingForm(initialGrading)
+
     setLoading(false)
+  }
+
+  async function handleSaveGrade(section: string) {
+    const form = gradingForm[section]
+    if (!form) return
+    setSavingGrade(section)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: existing } = await supabase.from('grades').select('id').eq('exam_id', examId).eq('section', section).single()
+      
+      const gradePayload = {
+        exam_id: examId,
+        section,
+        numeric_score: form.score,
+        feedback: form.feedback,
+        evaluator_id: adminUser.id,
+        graded_at: new Date().toISOString()
+      }
+
+      if (existing) {
+        await supabase.from('grades').update(gradePayload).eq('id', existing.id)
+      } else {
+        await supabase.from('grades').insert(gradePayload)
+      }
+
+      // Re-trigger scoring API to update finalized CEFR
+      await fetch('/api/score-exam', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ examId })
+      })
+
+      await loadReview()
+      alert('Grade saved and exam score recalculated.')
+    } catch (err) {
+      console.error(err)
+      alert('Error saving grade')
+    } finally {
+      setSavingGrade(null)
+    }
+  }
+
+  async function handleReassign() {
+    if (!confirm('Are you sure you want to RE-ASSIGN this exam? All current status will be reset to pending.')) return
+    try {
+      await supabase.from('exams').update({
+        status: 'pending',
+        started_at: null,
+        completed_at: null,
+        final_numeric_score: null,
+        final_cefr_score: null
+      }).eq('id', examId)
+      
+      // Optionally clear answers or keep them? User said "re-assign", usually means fresh start or just unlock.
+      // We'll keep answers for now but status reset allows them to re-enter.
+      router.push('/admin')
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const sectionScores = useMemo(() => {
@@ -126,6 +200,7 @@ export default function AdminExamReviewPage() {
           {/* Tabs */}
           <div style={{display:'flex',gap:'8px',padding:'6px',background:'#fff',borderRadius:'12px',border:'1px solid var(--bdr)',boxShadow:'0 2px 10px rgba(0,0,0,0.02)'}}>
             <button onClick={()=>setActiveTab('overview')} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:activeTab==='overview'?'var(--navy)':'transparent',color:activeTab==='overview'?'#fff':'var(--t2)',fontSize:'13px',fontWeight:700,cursor:'pointer',transition:'all 0.2s'}}>Overview</button>
+            <button onClick={()=>setActiveTab('observation')} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:activeTab==='observation'?'var(--navy)':'transparent',color:activeTab==='observation'?'#fff':'var(--t2)',fontSize:'13px',fontWeight:700,cursor:'pointer',transition:'all 0.2s'}}>Observation</button>
             {sectionsPresent.map(s => (
               <button key={s} onClick={()=>setActiveTab(s)} style={{flex:1,padding:'10px',borderRadius:'8px',border:'none',background:activeTab===s?'var(--navy)':'transparent',color:activeTab===s?'#fff':'var(--t2)',fontSize:'13px',fontWeight:700,cursor:'pointer',transition:'all 0.2s',textTransform:'capitalize'}}>{s}</button>
             ))}
@@ -137,37 +212,83 @@ export default function AdminExamReviewPage() {
               
               {/* Detailed Breakdown */}
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(200px, 1fr))',gap:'16px',marginBottom:'32px'}}>
-                {Object.entries(sectionScores).map(([section, data]) => (
-                  <div key={section} style={{padding:'20px',borderRadius:'12px',border:'1px solid var(--bdr)',background:'var(--off)'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-                      <span style={{fontSize:'12px',fontWeight:700,color:'var(--t2)',textTransform:'uppercase',letterSpacing:'0.5px'}}>{data.label}</span>
-                      <span style={{fontSize:'18px',fontFamily:'var(--fm)',fontWeight:800,color:sectionColors[section]||'var(--navy)'}}>{data.score}%</span>
+                {Object.entries(sectionScores).map(([section, data]) => {
+                  const isManual = ['writing', 'speaking'].includes(section)
+                  const isGraded = isManual ? grades.some(g => g.section === section) : true
+                  
+                  return (
+                    <div key={section} style={{padding:'20px',borderRadius:'12px',border:'1px solid var(--bdr)',background:'var(--off)',position:'relative'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                        <span style={{fontSize:'12px',fontWeight:700,color:'var(--t2)',textTransform:'uppercase',letterSpacing:'0.5px'}}>{data.label}</span>
+                        <span style={{fontSize:'18px',fontFamily:'var(--fm)',fontWeight:800,color:sectionColors[section]||'var(--navy)'}}>
+                          {isManual && !isGraded ? '—' : `${data.score}%`}
+                        </span>
+                      </div>
+                      <div style={{height:'6px',borderRadius:'3px',background:'rgba(0,0,0,0.05)',overflow:'hidden',marginBottom:'8px'}}>
+                        <div style={{height:'100%',width:`${isManual && !isGraded ? 0 : data.score}%`,background:sectionColors[section]||'var(--navy)',borderRadius:'3px'}} />
+                      </div>
+                      <div style={{fontSize:'10px',fontWeight:700,color:isManual && !isGraded ? '#B45309' : '#059669',textTransform:'uppercase'}}>
+                        {isManual ? (isGraded ? '● Manual Grade Set' : '○ Awaiting Manual Grade') : '● Auto-Scored'}
+                      </div>
                     </div>
-                    <div style={{height:'6px',borderRadius:'3px',background:'rgba(0,0,0,0.05)',overflow:'hidden'}}>
-                      <div style={{height:'100%',width:`${data.score}%`,background:sectionColors[section]||'var(--navy)',borderRadius:'3px'}} />
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
 
-              {/* Proctoring Summary */}
-              {['super_admin','assessor'].includes(adminUser?.role) && (
-                <div style={{background:'#FEF2F2',borderRadius:'12px',padding:'20px',border:'1px solid #FECACA'}}>
-                  <h3 style={{fontSize:'14px',fontWeight:800,color:'#DC2626',marginBottom:'8px'}}>Proctoring & Security Log</h3>
-                  <p style={{fontSize:'13px',color:'#991B1B',margin:0,lineHeight:1.6}}>
-                    Camera feed was monitored. No major anomalies flagged. Eye-tracking confidence score: 94%.
-                  </p>
-                </div>
-              )}
+              {/* Security Summary */}
+              <div style={{background:'#FEF2F2',borderRadius:'12px',padding:'20px',border:'1px solid #FECACA'}}>
+                <h3 style={{fontSize:'14px',fontWeight:800,color:'#DC2626',marginBottom:'8px'}}>Proctoring & Security Summary</h3>
+                <p style={{fontSize:'13px',color:'#991B1B',margin:0,lineHeight:1.6}}>
+                  {observations.violations.length > 0 
+                    ? `Potential violations detected: ${observations.violations.length} event(s) flagged during the session. Review the Observation tab for details.`
+                    : "No security violations were flagged during this exam session."}
+                </p>
+              </div>
             </div>
           )}
 
-          {activeTab !== 'overview' && (
+          {activeTab === 'observation' && (
+            <div style={{background:'#fff',borderRadius:'16px',padding:'32px',border:'1px solid var(--bdr)',boxShadow:'0 4px 20px rgba(0,0,0,0.03)'}}>
+              <h2 style={{fontFamily:'var(--fm)',fontSize:'20px',fontWeight:800,color:'var(--navy)',marginBottom:'24px'}}>Proctoring & Behavior Timeline</h2>
+              
+              <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+                {/* Violations Summary */}
+                {observations.violations.length > 0 && (
+                  <div style={{padding:'20px',background:'#FEF2F2',borderRadius:'12px',border:'1px solid #FECACA'}}>
+                    <h3 style={{fontSize:'14px',fontWeight:800,color:'#DC2626',marginBottom:'12px'}}>Security Alerts Detected ({observations.violations.length})</h3>
+                    <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                      {observations.violations.map((v, i) => (
+                        <div key={i} style={{fontSize:'13px',color:'#991B1B',display:'flex',justifyContent:'space-between'}}>
+                          <span>⚠️ {v.type.replace('_',' ')}</span>
+                          <span>{new Date(v.occurred_at).toLocaleTimeString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Photo Timeline */}
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))',gap:'16px'}}>
+                  {observations.photos.map((p, i) => (
+                    <div key={i} style={{borderRadius:'10px',overflow:'hidden',border:'1px solid var(--bdr)',background:'var(--off)'}}>
+                      <img src={supabase.storage.from('exam-photos').getPublicUrl(p.snapshot_url).data.publicUrl} style={{width:'100%',height:'135px',objectFit:'cover'}} alt="Proctoring" />
+                      <div style={{padding:'8px',fontSize:'11px',fontWeight:600,color:'var(--t3)',textAlign:'center'}}>
+                        {new Date(p.captured_at).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  ))}
+                  {observations.photos.length === 0 && <div style={{gridColumn:'1/-1',padding:'40px',textAlign:'center',color:'var(--t4)',fontSize:'14px'}}>No proctoring photos captured for this session.</div>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab !== 'overview' && activeTab !== 'observation' && (
             <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
               <h2 style={{fontFamily:'var(--fm)',fontSize:'20px',fontWeight:800,color:'var(--navy)',marginBottom:'8px',textTransform:'capitalize'}}>{activeTab} Responses</h2>
               
               {answers.filter(a => a.section === activeTab).map((ans, idx) => {
-                const grade = grades.find(g => g.answer_id === ans.id)
+                const grade = grades.find(g => g.section === activeTab)
                 const isWritingOrSpeaking = ['writing','speaking'].includes(activeTab)
                 
                 return (
@@ -191,18 +312,12 @@ export default function AdminExamReviewPage() {
                         )}
                       </div>
                       
-                      {activeTab === 'speaking' && ans.candidate_answer?.includes('http') ? (
+                      {activeTab === 'speaking' && ans.answer?.includes('[audio:') ? (
                         <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
-                          <audio src={ans.candidate_answer} controls style={{width:'100%',height:'36px'}} />
-                          {ans.transcription && (
-                            <div style={{background:'#fff',padding:'12px',borderRadius:'8px',border:'1px dashed var(--bdr)',fontSize:'13.5px',color:'var(--t2)',lineHeight:1.6}}>
-                              <span style={{fontSize:'10px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase',display:'block',marginBottom:'4px'}}>AI Transcription</span>
-                              "{ans.transcription}"
-                            </div>
-                          )}
+                          <audio src={supabase.storage.from('exam-audio').getPublicUrl(ans.answer.replace('[audio:','').replace(']','')).data.publicUrl} controls style={{width:'100%',height:'36px'}} />
                         </div>
                       ) : (
-                        <div style={{fontSize:'14.5px',color:'var(--navy)',lineHeight:1.6,whiteSpace:'pre-wrap'}}>{ans.candidate_answer || '-'}</div>
+                        <div style={{fontSize:'14.5px',color:'var(--navy)',lineHeight:1.6,whiteSpace:'pre-wrap'}}>{ans.answer || '-'}</div>
                       )}
                       
                       {!isWritingOrSpeaking && ans.questions?.correct_answer && (
@@ -211,30 +326,50 @@ export default function AdminExamReviewPage() {
                         </div>
                       )}
                     </div>
-
-                    {/* GRADING COMPONENT FOR MANUALLY GRADED */}
-                    {isWritingOrSpeaking && grade && (
-                      <div style={{marginTop:'16px',padding:'16px',borderRadius:'10px',background:'#F0F9FF',border:'1px solid #BAE6FD'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-                          <span style={{fontSize:'12px',fontWeight:800,color:'#0369A1',textTransform:'uppercase'}}>Evaluator Assessment</span>
-                          <span style={{fontSize:'16px',fontWeight:800,color:'#0284C7',fontFamily:'var(--fm)'}}>{grade.numeric_score}% ({grade.cefr_level})</span>
-                        </div>
-                        
-                        {grade.grade_details && grade.grade_details.length > 0 && (
-                          <div style={{display:'flex',flexWrap:'wrap',gap:'6px',marginBottom:'12px'}}>
-                            {grade.grade_details.map((d:any, i:number) => (
-                              <div key={i} style={{fontSize:'11px',fontWeight:600,padding:'4px 8px',borderRadius:'6px',background:'#E0F2FE',color:'#0369A1'}}>
-                                {d.criterion.split(' ')[0]}: {d.score}/{d.max_score}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <p style={{fontSize:'13px',color:'#0C4A6E',margin:0,lineHeight:1.6}}>{grade.feedback}</p>
-                      </div>
-                    )}
                   </div>
                 )
               })}
+
+              {/* MANUAL GRADING SECTION FOR WRITING/SPEAKING */}
+              {['writing','speaking'].includes(activeTab) && (
+                <div style={{background:'#fff',borderRadius:'16px',padding:'32px',border:'2.5px solid var(--sky)',boxShadow:'0 10px 30px rgba(58,142,208,0.1)'}}>
+                  <h3 style={{fontFamily:'var(--fm)',fontSize:'18px',fontWeight:800,color:'var(--navy)',marginBottom:'20px',display:'flex',alignItems:'center',gap:'10px'}}>
+                    <span>🖊️ Evaluator Feedback & Grading</span>
+                    <span style={{fontSize:'11px',fontWeight:700,background:'var(--sky)',color:'#fff',padding:'2px 8px',borderRadius:'4px'}}>MANUAL</span>
+                  </h3>
+                  
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 2fr',gap:'20px'}}>
+                    <div>
+                      <label style={{fontSize:'12px',fontWeight:700,color:'var(--t3)',display:'block',marginBottom:'8px'}}>Section Score (%)</label>
+                      <input 
+                        type="number" 
+                        min="0" max="100" 
+                        value={gradingForm[activeTab]?.score || 0}
+                        onChange={(e)=>setGradingForm(p=>({...p, [activeTab]: {...(p[activeTab]||{feedback:''}), score: parseInt(e.target.value)}}))}
+                        style={{width:'100%',padding:'12px',borderRadius:'10px',border:'1px solid var(--bdr)',fontSize:'16px',fontWeight:700,color:'var(--navy)',outline:'none'}}
+                      />
+                    </div>
+                    <div>
+                      <label style={{fontSize:'12px',fontWeight:700,color:'var(--t3)',display:'block',marginBottom:'8px'}}>Professional Feedback</label>
+                      <textarea 
+                        rows={4}
+                        value={gradingForm[activeTab]?.feedback || ''}
+                        onChange={(e)=>setGradingForm(p=>({...p, [activeTab]: {...(p[activeTab]||{score:0}), feedback: e.target.value}}))}
+                        placeholder="Provide detailed feedback on the candidate's performance in this section..."
+                        style={{width:'100%',padding:'12px',borderRadius:'10px',border:'1px solid var(--bdr)',fontSize:'14px',color:'var(--navy)',outline:'none',resize:'none'}}
+                      ></textarea>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    disabled={savingGrade === activeTab}
+                    onClick={()=>handleSaveGrade(activeTab)}
+                    style={{width:'100%',marginTop:'20px',padding:'14px',borderRadius:'100px',background:'var(--sky)',color:'#fff',fontSize:'14px',fontWeight:800,border:'none',cursor:'pointer',boxShadow:'0 4px 12px rgba(58,142,208,0.3)',transition:'all 0.2s',opacity:savingGrade===activeTab?0.7:1}}
+                  >
+                    {savingGrade === activeTab ? 'Finalizing Grade...' : 'Save Section Grade & Recalculate Result'}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -251,7 +386,7 @@ export default function AdminExamReviewPage() {
             
             <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',marginBottom:'24px'}}>
               <span style={{fontSize:'11px',fontWeight:700,padding:'4px 10px',borderRadius:'100px',background:'var(--off)',border:'1px solid var(--bdr)',color:'var(--t2)'}}>{exam.users?.organizations?.name || 'No Org'}</span>
-              <span style={{fontSize:'11px',fontWeight:700,padding:'4px 10px',borderRadius:'100px',background:'rgba(58,142,208,0.1)',color:'var(--sky)',textTransform:'capitalize'}}>{(exam.role_profile||'General').replace('_',' ')}</span>
+              <span style={{fontSize:'11px',fontWeight:700,padding:'4px 10px',borderRadius:'100px',background:'rgba(58,142,208,0.1)',color:'var(--sky)',textTransform:'capitalize'}}>{(exam.exam_templates?.role_profile||'General').replace('_',' ')}</span>
             </div>
 
             <div style={{padding:'20px',background:'var(--off)',borderRadius:'12px',border:'1px solid var(--bdr)'}}>
@@ -263,6 +398,13 @@ export default function AdminExamReviewPage() {
                 {passed ? `Passed (${exam.final_numeric_score}%)` : `Failed (${exam.final_numeric_score}%)`}
               </div>
             </div>
+            
+            <button 
+              onClick={handleReassign}
+              style={{width:'100%',marginTop:'16px',padding:'12px',borderRadius:'10px',border:'none',background:'#FEE2E2',color:'#DC2626',fontSize:'13px',fontWeight:700,cursor:'pointer'}}
+            >
+              🔄 Re-assign Exam
+            </button>
           </div>
           
           <div style={{background:'#fff',borderRadius:'16px',padding:'20px',border:'1px solid var(--bdr)',boxShadow:'0 4px 20px rgba(0,0,0,0.03)'}}>

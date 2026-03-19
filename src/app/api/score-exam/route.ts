@@ -91,20 +91,42 @@ export async function POST(req: NextRequest) {
 
     let finalScore = 0
     let totalWeight = 0
-    for (const [section, score] of Object.entries(sectionScores)) {
-      const weight = weights[section] || 0
-      finalScore += score * weight
-      totalWeight += weight
+    let sectionsPending = 0
+
+    const templateSections = [
+      { key: 'grammar', count: template.grammar_count },
+      { key: 'reading', count: template.reading_count },
+      { key: 'listening', count: template.listening_count },
+      { key: 'writing', count: template.writing_count },
+      { key: 'speaking', count: template.speaking_count }
+    ]
+
+    for (const ts of templateSections) {
+      if ((ts.count || 0) > 0) {
+        const score = sectionScores[ts.key]
+        const weight = (template[`weight_${ts.key}`] || 0) / 100
+        
+        if (score !== undefined) {
+          finalScore += score * weight
+          totalWeight += weight
+        } else {
+          sectionsPending++
+        }
+      }
     }
 
-    if (totalWeight > 0) finalScore = finalScore / totalWeight
-    const cefrLevel = mapToCEFR(finalScore)
+    // Normalized score based on sections actually graded so far
+    const normalizedScore = totalWeight > 0 ? (finalScore / totalWeight) : 0
+    const cefrLevel = mapToCEFR(normalizedScore)
     const passed = isPassing(cefrLevel, template.passing_cefr || 'B2')
 
+    // Only certify if all active sections are graded
+    const newStatus = sectionsPending === 0 ? 'certified' : 'grading'
+
     await supabase.from('exams').update({
-      final_numeric_score: Math.round(finalScore * 10) / 10,
+      final_numeric_score: Math.round(normalizedScore * 10) / 10,
       final_cefr_score: cefrLevel,
-      status: 'certified'
+      status: newStatus
     }).eq('id', examId)
 
     await supabase.from('certificates').upsert({
@@ -113,8 +135,8 @@ export async function POST(req: NextRequest) {
       issued_at: new Date().toISOString()
     }, { onConflict: 'exam_id' })
 
-    // Send automated email to candidate
-    if (resend && candidateData?.email) {
+    // Send automated email to candidate ONLY when certified
+    if (resend && candidateData?.email && newStatus === 'certified') {
       try {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://app.avilingo.co'
         const resultLink = `${appUrl}/exam/${examId}/result`
