@@ -18,10 +18,14 @@ export default function Login() {
 
     // Use API route (service role key) to bypass RLS and get role reliably
     let role: string | null = null
+    const accessToken = data.session?.access_token
     try {
       const res = await fetch('/api/get-role', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`
+        },
         body: JSON.stringify({ userId: data.user.id })
       })
       const json = await res.json()
@@ -30,11 +34,8 @@ export default function Login() {
       role = null
     }
 
-    // Auto-heal: if no user row found, create as candidate
-    if (!role) {
-      await fetch('/api/get-role', { method: 'POST', body: JSON.stringify({ userId: data.user.id }) })
-      role = 'candidate'
-    }
+    // Fallback: if no user row found, default to candidate
+    if (!role) { role = 'candidate' }
 
     if (['super_admin', 'hr_manager', 'evaluator', 'instructor'].includes(role || '')) {
       localStorage.setItem('adminId', data.user.id)

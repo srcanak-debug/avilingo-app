@@ -273,16 +273,20 @@ export default function AdminDashboard() {
   }, [activeSection])
 
   async function checkAuth() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { router.push('/login'); return }
+    const user = session.user
     
     // Use API route (service role) to bypass recursive RLS policy
     const res = await fetch('/api/get-role', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
       body: JSON.stringify({ userId: user.id })
     })
-    const { role, email, full_name } = await res.json()
+    const { role, full_name } = await res.json()
 
     if (!role || role !== 'super_admin') { router.push('/login'); return }
     
