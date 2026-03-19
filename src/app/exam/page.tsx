@@ -95,6 +95,34 @@ export default function CandidateDashboard() {
             ))}
           </div>
         )}
+
+        {/* DLA Simülasyon Kartı */}
+        <div style={{marginTop:'36px'}}>
+          <div style={{fontSize:'11px',color:'rgba(255,255,255,0.35)',textTransform:'uppercase',letterSpacing:'0.8px',marginBottom:'12px'}}>
+            Hazırlık Araçları
+          </div>
+          <div style={{background:'linear-gradient(135deg, rgba(90,174,223,0.12), rgba(58,142,208,0.06))',borderRadius:'16px',padding:'24px',border:'1px solid rgba(90,174,223,0.2)',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
+              <div style={{width:'48px',height:'48px',borderRadius:'14px',background:'linear-gradient(135deg,#3A8ED0,#5AAEDF)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'22px',flexShrink:0,boxShadow:'0 4px 16px rgba(58,142,208,0.35)'}}>
+                ✈️
+              </div>
+              <div>
+                <h3 style={{fontFamily:'var(--fm)',fontSize:'16px',fontWeight:800,color:'#fff',margin:'0 0 3px'}}>
+                  THY DLA Sınavı Simülasyonu
+                </h3>
+                <div style={{fontSize:'12.5px',color:'rgba(255,255,255,0.45)'}}>
+                  11 soru · 4 bölüm · ~20 dakika · Gerçek format
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => router.push('/dla')}
+              style={{padding:'10px 22px',borderRadius:'10px',border:'none',background:'linear-gradient(135deg,#3A8ED0,#5AAEDF)',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer',fontFamily:'var(--fb)',flexShrink:0,boxShadow:'0 4px 14px rgba(58,142,208,0.3)',whiteSpace:'nowrap'}}
+            >
+              Başla →
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )
