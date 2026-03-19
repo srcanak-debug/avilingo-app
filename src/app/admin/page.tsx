@@ -19,6 +19,7 @@ const ResourceManager = dynamic(() => import('./components/tms/ResourceManager')
 // LMS Components
 const CourseLibrary = dynamic(() => import('./components/lms/CourseLibrary'))
 const LessonPlayer = dynamic(() => import('./components/lms/LessonPlayer'))
+const CategoryManager = dynamic(() => import('./components/lms/CategoryManager'))
 
 // EBT Components
 const EbtMatrix = dynamic(() => import('./components/ebt/EbtMatrix'))
@@ -86,6 +87,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'LMS & CompBT (Eğitim)',
     items: [
+      { id: 'lms_categories', label: 'Course Categories', icon: '🗂️' },
       { id: 'lms_library', label: 'Course Library', icon: '📚' },
       { id: 'lms_player', label: 'Lesson Player', icon: '🎥' },
       { id: 'compbt_adaptive', label: 'Adaptive Learning', icon: '🧠' },
@@ -882,6 +884,7 @@ export default function AdminDashboard() {
 
           {activeSection === 'lms_library' && <CourseLibrary />}
           {activeSection === 'lms_player' && <LessonPlayer />}
+          {activeSection === 'lms_categories' && <CategoryManager />}
 
           {activeSection === 'compbt_adaptive' && <AdaptiveLearning />}
           {activeSection === 'audit' && <AuditSystem />}
