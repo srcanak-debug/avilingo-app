@@ -27,7 +27,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 # ─── CONFIGURATION ───
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://zpqnidyhfrejkxuxlbeg.supabase.co")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwcW5pZHloZnJlamt4dXhsYmVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1OTM1MDQsImV4cCI6MjA4OTE2OTUwNH0.dVkG5o0bTqiHmXKT9UPt6vuOR25Yunn8uoytRC_EFb0")
+# Use service role key to bypass RLS when reading questions
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwcW5pZHloZnJlamt4dXhsYmVnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzU5MzUwNCwiZXhwIjoyMDg5MTY5NTA0fQ.GsD6G9B6JiXjFX1dRkrMYPbvRRzp90E5LgFiNgKWiww")
 
 R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID", "601c9886f852efcc5b1492141a69fc77")
 R2_ACCESS_KEY = os.environ.get("R2_ACCESS_KEY", "3d91bc55fa0faf2a000a75da86c5947c")
