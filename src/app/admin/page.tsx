@@ -5,14 +5,41 @@ import { supabase } from '@/lib/supabase'
 
 import dynamic from 'next/dynamic'
 
-// Lazy-loaded components for Phase 9 performance
+// Lazy-loaded components for Phase 9-11 performance
 const DashboardGrid = dynamic(() => import('./components/DashboardGrid'))
 const QuestionBank = dynamic(() => import('./components/QuestionBank'))
 const UsersList = dynamic(() => import('./components/UsersList'))
 const OrganizationList = dynamic(() => import('./components/OrganizationList'))
 const TemplatesList = dynamic(() => import('./components/TemplatesList'))
 
-const navGroups = [
+// TMS Components
+const QualificationTracker = dynamic(() => import('./components/tms/QualificationTracker'))
+const ResourceManager = dynamic(() => import('./components/tms/ResourceManager'))
+
+// LMS Components
+const CourseLibrary = dynamic(() => import('./components/lms/CourseLibrary'))
+const LessonPlayer = dynamic(() => import('./components/lms/LessonPlayer'))
+
+// EBT Components
+const EbtMatrix = dynamic(() => import('./components/ebt/EbtMatrix'))
+const AssessmentForms = dynamic(() => import('./components/ebt/AssessmentForms'))
+
+// CompBT Components
+const AdaptiveLearning = dynamic(() => import('./components/compbt/AdaptiveLearning'))
+
+interface NavItem {
+  id: string
+  label: string
+  icon: string
+  disabled?: boolean
+}
+
+interface NavGroup {
+  label: string
+  items: NavItem[]
+}
+
+const navGroups: NavGroup[] = [
   {
     label: 'e-Test (Sınav)',
     items: [
@@ -23,11 +50,21 @@ const navGroups = [
     ]
   },
   {
-    label: 'LMS & TMS (Eğitim)',
+    label: 'TMS & EBT (Planlama)',
     items: [
+      { id: 'tms_quals', label: 'Qualifications', icon: '📜' },
+      { id: 'tms_resources', label: 'Resource Mgmt', icon: '🏢' },
+      { id: 'ebt_matrix', label: 'EBT Matrix', icon: '🎯' },
+      { id: 'ebt_forms', label: 'Assessment Forms', icon: '✍️' },
+    ]
+  },
+  {
+    label: 'LMS & CompBT (Eğitim)',
+    items: [
+      { id: 'lms_library', label: 'Course Library', icon: '📚' },
+      { id: 'lms_player', label: 'Lesson Player', icon: '🎥' },
+      { id: 'compbt_adaptive', label: 'Adaptive Learning', icon: '🧠' },
       { id: 'evaluator', label: 'Grading Queue', icon: '✍️' },
-      { id: 'lms_placeholder', label: 'LMS Courses', icon: '🎓', disabled: true },
-      { id: 'tms_placeholder', label: 'EBT Matrices', icon: '🎯', disabled: true },
     ]
   },
   {
@@ -35,7 +72,6 @@ const navGroups = [
     items: [
       { id: 'organizations', label: 'Organizations', icon: '🏢' },
       { id: 'users', label: 'Users & Candidates', icon: '👥' },
-      { id: 'invoices', label: 'Invoices', icon: '💰' },
       { id: 'audit', label: 'Audit Logs', icon: '📜' },
     ]
   }
@@ -815,6 +851,14 @@ export default function AdminDashboard() {
               sectionColors={sectionColors}
             />
           )}
+
+          {activeSection === 'tms_quals' && <QualificationTracker />}
+          {activeSection === 'tms_resources' && <ResourceManager />}
+
+          {activeSection === 'lms_library' && <CourseLibrary />}
+          {activeSection === 'lms_player' && <LessonPlayer />}
+
+          {activeSection === 'compbt_adaptive' && <AdaptiveLearning />}
 
           {activeSection === 'questions' && (
             <QuestionBank 
