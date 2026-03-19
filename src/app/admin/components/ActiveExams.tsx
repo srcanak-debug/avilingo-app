@@ -189,6 +189,7 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
           >
             <option value="all">Sınav Durumu: Hepsi</option>
             <option value="scheduled">Bekleyen (Scheduled)</option>
+            <option value="pending">Bekleyen (Legacy/Pending)</option>
             <option value="in_progress">Devam Eden</option>
             <option value="completed">Tamamlanan</option>
             <option value="cancelled">İptal / Pasif</option>

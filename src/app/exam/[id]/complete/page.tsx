@@ -82,6 +82,20 @@ export default function ExamCompletePage() {
       completion: total > 0 ? Math.round((answered / total) * 100) : 0,
       time: timeMinutes,
     })
+
+    // Trigger auto-scoring if not already scored
+    if (examData.status === 'completed' && !examData.final_numeric_score) {
+      try {
+        await fetch('/api/score-exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ examId })
+        })
+      } catch (err) {
+        console.error('Scoring error:', err)
+      }
+    }
+
     setLoading(false)
   }
 
