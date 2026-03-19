@@ -1,11 +1,12 @@
 'use client'
 import { useState } from 'react'
+import { PILOT_COURSE_SEED } from '@/lib/data/pilot-seed'
 
 interface Course {
   id: string
   title: string
-  category: 'Regulatory' | 'Technical' | 'Safety' | 'Soft Skills'
-  format: 'SCORM' | 'Video' | 'PDF'
+  category: string
+  format: 'SCORM' | 'Video' | 'PDF' | 'AI-Generated'
   duration: string
   enrolled: number
   status: 'active' | 'draft'
@@ -13,6 +14,15 @@ interface Course {
 
 export default function CourseLibrary() {
   const [courses, setCourses] = useState<Course[]>([
+    ...PILOT_COURSE_SEED.map((p, idx) => ({
+      id: `p-${idx}`,
+      title: p.title,
+      category: 'Pilot Training',
+      format: 'AI-Generated' as const,
+      duration: p.duration,
+      enrolled: Math.floor(Math.random() * 200) + 50,
+      status: 'active' as const
+    })),
     { id: '1', title: 'ETOPS Operations - Initial', category: 'Technical', format: 'SCORM', duration: '4h', enrolled: 120, status: 'active' },
     { id: '2', title: 'Crew Resource Management (CRM)', category: 'Soft Skills', format: 'Video', duration: '2h', enrolled: 450, status: 'active' },
     { id: '3', title: 'Safety Management Systems (SMS)', category: 'Safety', format: 'SCORM', duration: '3h', enrolled: 85, status: 'active' },
