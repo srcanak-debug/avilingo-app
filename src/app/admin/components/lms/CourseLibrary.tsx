@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { PILOT_COURSE_SEED } from '@/lib/data/pilot-seed'
 import { WXR_2100_COURSE } from '@/lib/data/courses/boeing-wxr-2100'
 import { TCAS_ACASII_COURSE } from '@/lib/data/courses/tcas-acas-v71'
+import { CABIN_NORMAL_SAFETY_COURSE } from '@/lib/data/courses/cabin-normal-safety'
 
 interface Course {
   id: string
@@ -26,6 +27,15 @@ export default function CourseLibrary() {
       status: 'active'
     },
     {
+      id: CABIN_NORMAL_SAFETY_COURSE.id,
+      title: CABIN_NORMAL_SAFETY_COURSE.title,
+      category: 'Kabin > Emniyet Masterclass',
+      format: 'Masterclass',
+      duration: CABIN_NORMAL_SAFETY_COURSE.duration,
+      enrolled: 0,
+      status: 'active'
+    },
+    {
       id: WXR_2100_COURSE.id,
       title: WXR_2100_COURSE.title,
       category: 'Pilot > General Subject',
@@ -43,10 +53,9 @@ export default function CourseLibrary() {
       enrolled: Math.floor(Math.random() * 200) + 50,
       status: 'active' as const
     })),
-    { id: '1', title: 'ETOPS Operations - Initial', category: 'Technical', format: 'SCORM', duration: '4h', enrolled: 120, status: 'active' },
-    { id: '2', title: 'Crew Resource Management (CRM)', category: 'Soft Skills', format: 'Video', duration: '2h', enrolled: 450, status: 'active' },
-    { id: '3', title: 'Safety Management Systems (SMS)', category: 'Safety', format: 'SCORM', duration: '3h', enrolled: 85, status: 'active' },
-    { id: '4', title: 'Dangerous Goods Awareness', category: 'Regulatory', format: 'PDF', duration: '1.5h', enrolled: 310, status: 'active' },
+    { id: 'c1', title: 'Crew Resource Management (CRM)', category: 'Kabin Memuru', format: 'Video', duration: '2h', enrolled: 450, status: 'active' },
+    { id: 'c2', title: 'Aviation Security Procedures', category: 'Kabin Memuru', format: 'AI-Generated', duration: '3h', enrolled: 85, status: 'active' },
+    { id: 'c3', title: 'Dangerous Goods Awareness (CAT-11)', category: 'Kabin Memuru', format: 'PDF', duration: '1.5h', enrolled: 310, status: 'active' },
   ])
 
   return (
