@@ -9,13 +9,24 @@ const SUPABASE_URL = 'https://zpqnidyhfrejkxuxlbeg.supabase.co'
 const SERVICE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpwcW5pZHloZnJlamt4dXhsYmVnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzU5MzUwNCwiZXhwIjoyMDg5MTY5NTA0fQ.GsD6G9B6JiXjFX1dRkrMYPbvRRzp90E5LgFiNgKWiww'
 
 async function query(table, params = '') {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}`, {
-    headers: {
-      'apikey': SERVICE_KEY,
-      'Authorization': `Bearer ${SERVICE_KEY}`,
-    }
-  })
-  return res.json()
+  let allData = [];
+  let offset = 0;
+  const limit = 1000;
+  
+  while (true) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${params}&limit=${limit}&offset=${offset}`, {
+      headers: {
+        'apikey': SERVICE_KEY,
+        'Authorization': `Bearer ${SERVICE_KEY}`,
+      }
+    });
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    allData = allData.concat(data);
+    if (data.length < limit) break;
+    offset += limit;
+  }
+  return allData;
 }
 
 async function main() {
