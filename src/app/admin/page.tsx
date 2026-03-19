@@ -30,6 +30,10 @@ const AdaptiveLearning = dynamic(() => import('./components/compbt/AdaptiveLearn
 // Audit Components
 const AuditSystem = dynamic(() => import('./components/audit/AuditSystem'))
 
+// AI Components
+const ContentTransformer = dynamic(() => import('./components/ai/ContentTransformer'))
+const QuestionGenerator = dynamic(() => import('./components/ai/QuestionGenerator'))
+
 interface NavItem {
   id: string
   label: string
@@ -53,6 +57,13 @@ const navGroups: NavGroup[] = [
     ]
   },
   {
+    label: 'AI Content Engine (Zeka)',
+    items: [
+      { id: 'ai_transform', label: 'Manual Transformer', icon: '🤖' },
+      { id: 'ai_gen', label: 'Question Gen', icon: '✍️' },
+    ]
+  },
+  {
     label: 'TMS & EBT (Planlama)',
     items: [
       { id: 'tms_quals', label: 'Qualifications', icon: '📜' },
@@ -71,7 +82,7 @@ const navGroups: NavGroup[] = [
     ]
   },
   {
-    label: 'Şirket & Sistem',
+    label: 'Sistem & Güvenlik',
     items: [
       { id: 'organizations', label: 'Organizations', icon: '🏢' },
       { id: 'users', label: 'Users & Candidates', icon: '👥' },
@@ -863,6 +874,9 @@ export default function AdminDashboard() {
 
           {activeSection === 'compbt_adaptive' && <AdaptiveLearning />}
           {activeSection === 'audit' && <AuditSystem />}
+          
+          {activeSection === 'ai_transform' && <ContentTransformer />}
+          {activeSection === 'ai_gen' && <QuestionGenerator />}
 
           {activeSection === 'questions' && (
             <QuestionBank 
