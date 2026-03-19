@@ -95,7 +95,7 @@ export default function LessonPlayer() {
 
       {/* Main Content Area: High-Fidelity Slide Player */}
       <div style={{ flex: 1, background: '#020617', position: 'relative', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ padding: '16px 24px', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(10px)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zindex: 10 }}>
+        <div style={{ padding: '16px 24px', background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(10px)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>SLIDE {parseInt(activeLesson.id) + 1} / {lessons.length}</span>
              <span style={{ color: '#fff', fontSize: '14px', fontWeight: 800 }}>{activeLesson.title}</span>
@@ -175,9 +175,6 @@ export default function LessonPlayer() {
         </div>
       </div>
 
-    </div>
-  )
-}
     </div>
   )
 }
