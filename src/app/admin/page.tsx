@@ -11,6 +11,7 @@ const QuestionBank = dynamic(() => import('./components/QuestionBank'))
 const UsersList = dynamic(() => import('./components/UsersList'))
 const OrganizationList = dynamic(() => import('./components/OrganizationList'))
 const TemplatesList = dynamic(() => import('./components/TemplatesList'))
+const ActiveExams = dynamic(() => import('./components/ActiveExams'))
 
 // TMS Components
 const QualificationTracker = dynamic(() => import('./components/tms/QualificationTracker'))
@@ -57,7 +58,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: '📊' },
       { id: 'questions', label: 'Question Bank', icon: '📚' },
-      { id: 'templates', label: 'Exam Templates', icon: '📋' },
+      { id: 'active_exams', label: 'Active Exams', icon: '📝' },
       { id: 'reports', label: 'Reports', icon: '📈' },
     ]
   },
@@ -928,6 +929,7 @@ export default function AdminDashboard() {
               startSingleDeleteTemplate={startSingleDeleteTemplate}
             />
           )}
+          {activeSection === 'active_exams' && <ActiveExams adminId={adminId} />}
 
           {activeSection === 'users' && (
             <UsersList 
