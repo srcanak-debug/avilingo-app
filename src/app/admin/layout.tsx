@@ -47,24 +47,34 @@ function AdminContent({ children }: { children: React.ReactNode }) {
       return
     }
 
-    const { data: u } = await supabase
-      .from('users')
-      .select('role,full_name')
-      .eq('id', session.user.id)
-      .single()
+    try {
+      const res = await fetch('/api/get-role', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ userId: session.user.id })
+      })
+      const json = await res.json()
+      const role = json.role
 
-    if (!u || !['super_admin', 'hr_manager', 'evaluator', 'instructor'].includes(u.role)) {
+      if (!['super_admin', 'hr_manager', 'evaluator', 'instructor'].includes(role)) {
+        router.push('/login')
+        return
+      }
+
+      setAdminName(json.full_name || 'Admin')
+      setAdminEmail(json.email || session.user.email || '')
+      
+      document.cookie = `adminId=${session.user.id}; path=/; max-age=86400`
+      document.cookie = `adminRole=${role}; path=/; max-age=86400`
+      
+      setLoading(false)
+    } catch (err) {
+      console.error('CheckAuth Error:', err)
       router.push('/login')
-      return
     }
-
-    setAdminName(u.full_name || 'Admin')
-    setAdminEmail(session.user.email || '')
-    
-    document.cookie = `adminId=${session.user.id}; path=/; max-age=86400`
-    document.cookie = `adminRole=${u.role}; path=/; max-age=86400`
-    
-    setLoading(false)
   }
 
   if (loading) {

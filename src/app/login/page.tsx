@@ -45,10 +45,8 @@ export default function Login() {
       document.cookie = `adminRole=${role}; path=/; max-age=86400`
     }
 
-    if (role === 'super_admin') router.push('/admin')
-    else if (role === 'hr_manager') router.push('/hr')
-    else if (role === 'instructor') router.push('/instructor')
-    else if (role === 'evaluator') router.push('/evaluator')
+    const adminRoles = ['super_admin', 'hr_manager', 'evaluator', 'instructor']
+    if (adminRoles.includes(role || '')) router.push('/admin')
     else if (role === 'candidate') router.push('/exam')
     else if (role === 'student') router.push('/learn')
     else router.push('/dashboard')

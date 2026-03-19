@@ -23,11 +23,24 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
-        const { data: u } = await supabase.from('users').select('role,full_name').eq('id', session.user.id).single()
-        setAdminId(session.user.id)
-        setAdminRole(u?.role || null)
-        setAdminName(u?.full_name || 'Admin')
-        setAdminEmail(session.user.email || '')
+        try {
+          const res = await fetch('/api/get-role', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify({ userId: session.user.id })
+          })
+          const json = await res.json()
+          
+          setAdminId(session.user.id)
+          setAdminRole(json.role)
+          setAdminName(json.full_name || 'Admin')
+          setAdminEmail(json.email || session.user.email || '')
+        } catch (err) {
+          console.error('AdminContext Auth Error:', err)
+        }
       }
       setLoading(false)
     }

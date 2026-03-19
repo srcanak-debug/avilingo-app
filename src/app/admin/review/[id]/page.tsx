@@ -38,7 +38,7 @@ export default function AdminExamReviewPage() {
     if (aid) document.cookie = `adminId=${aid}; path=/; max-age=86400`
     if (arole) document.cookie = `adminRole=${arole}; path=/; max-age=86400`
 
-    if(!aid || !['super_admin', 'assessor', 'hr'].includes(arole || '')) {
+    if(!aid || !['super_admin', 'hr_manager', 'evaluator', 'instructor'].includes(arole || '')) {
       router.push('/login')
       return
     }
@@ -63,7 +63,7 @@ export default function AdminExamReviewPage() {
     if (!examData) { router.push('/admin'); return }
     
     // HR restriction: If HR, they can only see candidates from their organization
-    if (adminUser?.role === 'hr') {
+    if (adminUser?.role === 'hr_manager') {
        const { data: hrData } = await supabase.from('users').select('org_id').eq('id', adminUser.id).single()
        if (hrData?.org_id !== examData.org_id) {
          alert("Unauthorized Access to this candidate's exam.")

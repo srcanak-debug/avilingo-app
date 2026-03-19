@@ -14,7 +14,8 @@ export function middleware(request: NextRequest) {
     const adminId = request.cookies.get('adminId')?.value
     const adminRole = request.cookies.get('adminRole')?.value
 
-    if (!adminId || !['super_admin', 'assessor', 'hr'].includes(adminRole || '')) {
+    const allowedRoles = ['super_admin', 'hr_manager', 'evaluator', 'instructor']
+    if (!adminId || !allowedRoles.includes(adminRole || '')) {
       // If no valid admin session, redirect to institutional login or main
       const url = request.nextUrl.clone()
       url.pathname = '/login'
