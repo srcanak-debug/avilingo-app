@@ -17,13 +17,21 @@ UPDATE questions SET is_latest = true WHERE is_latest IS NULL;
 -- 2. Create missing auxiliary tables
 CREATE TABLE IF NOT EXISTS question_analytics (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  question_id UUID REFERENCES questions(id) ON DELETE CASCADE UNIQUE, -- Added UNIQUE
+  question_id UUID REFERENCES questions(id) ON DELETE CASCADE,
   difficulty_index NUMERIC DEFAULT 100, -- 0-100 Success Rate
   total_attempts INT DEFAULT 0,
   correct_count INT DEFAULT 0,
   last_used_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Ensure the UNIQUE constraint exists (for ON CONFLICT to work)
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'question_analytics_question_id_key') THEN
+    ALTER TABLE question_analytics ADD CONSTRAINT question_analytics_question_id_key UNIQUE (question_id);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS departments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
