@@ -1,26 +1,24 @@
 -- ═══════════════════════════════════════════════════════════════
--- AVILINGO — ADMIN PANEL FIX (v3 - Nuclear Alignment)
--- Reconciles database schema with Admin UI requirements
+-- AVILINGO — ADMIN PANEL FIX (FINAL SIMPLIFIED)
+-- ADIM 1: YAPIYI DÜZELTME
 -- ═══════════════════════════════════════════════════════════════
 
--- 1. Ensure columns exist in 'questions' table
-ALTER TABLE questions 
-  ADD COLUMN IF NOT EXISTS is_latest BOOLEAN DEFAULT true,
-  ADD COLUMN IF NOT EXISTS version_number INT DEFAULT 1,
-  ADD COLUMN IF NOT EXISTS role_tag TEXT DEFAULT 'general',
-  ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES auth.users(id),
-  ADD COLUMN IF NOT EXISTS parent_question_id UUID REFERENCES questions(id);
-
--- Sync is_latest for old rows
-UPDATE questions SET is_latest = true WHERE is_latest IS NULL;
-
--- 2. Drop and Recreate auxiliary tables (Clean start for these empty tables)
--- This ensures the UNIQUE constraint is correctly applied.
+-- 1. Tabloları temizleyelim (Yeni eklenen yardımcı tablolar)
 DROP TABLE IF EXISTS question_assignments CASCADE;
 DROP TABLE IF EXISTS question_analytics CASCADE;
 DROP TABLE IF EXISTS departments CASCADE;
 DROP TABLE IF EXISTS sub_roles CASCADE;
 
+-- 2. Sorular tablosuna eksik kolonları ekleyelim
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_latest BOOLEAN DEFAULT true;
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS version_number INT DEFAULT 1;
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS role_tag TEXT DEFAULT 'general';
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS updated_by UUID REFERENCES auth.users(id);
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS parent_question_id UUID REFERENCES questions(id);
+
+UPDATE questions SET is_latest = true WHERE is_latest IS NULL;
+
+-- 3. Yardımcı tabloları en baştan düzgün kuralım
 CREATE TABLE departments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL UNIQUE,
@@ -35,13 +33,13 @@ CREATE TABLE sub_roles (
 
 CREATE TABLE question_analytics (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  question_id UUID REFERENCES questions(id) ON DELETE CASCADE,
+  question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
   difficulty_index NUMERIC DEFAULT 100,
   total_attempts INT DEFAULT 0,
   correct_count INT DEFAULT 0,
   last_used_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
-  CONSTRAINT question_analytics_question_id_unique UNIQUE (question_id)
+  CONSTRAINT q_analytics_q_id_unique UNIQUE (question_id)
 );
 
 CREATE TABLE question_assignments (
@@ -52,34 +50,27 @@ CREATE TABLE question_assignments (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 3. Populate default metadata
-INSERT INTO departments (name) VALUES 
-  ('Flight Operations'), ('Cabin Service'), ('Ground Ops'), ('Technic'), ('ATC')
-ON CONFLICT (name) DO NOTHING;
+-- 4. Verileri ve Politikaları ekleyelim
+INSERT INTO departments (name) VALUES ('Flight Ops'), ('Cabin'), ('Ground'), ('Technic'), ('ATC') ON CONFLICT DO NOTHING;
+INSERT INTO sub_roles (name) VALUES ('Junior'), ('Senior'), ('Captain'), ('Lead'), ('Chief') ON CONFLICT DO NOTHING;
 
-INSERT INTO sub_roles (name) VALUES 
-  ('Junior'), ('Senior'), ('Captain'), ('Lead Technician'), ('Chief')
-ON CONFLICT (name) DO NOTHING;
-
--- 4. Initialize analytics for ALL questions
 INSERT INTO question_analytics (question_id)
 SELECT id FROM questions
 ON CONFLICT (question_id) DO NOTHING;
 
--- 5. Security & RLS
+-- 5. Güvenlik
 ALTER TABLE question_analytics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sub_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE question_assignments ENABLE ROW LEVEL SECURITY;
 
--- Safety: Drop existing policies first to avoid "already exists" errors
-DROP POLICY IF EXISTS "Allow public read on metadata" ON departments;
-DROP POLICY IF EXISTS "Allow public read on sub_roles" ON sub_roles;
-DROP POLICY IF EXISTS "Admins full access to analytics" ON question_analytics;
+DROP POLICY IF EXISTS "public_read_depts" ON departments;
+CREATE POLICY "public_read_depts" ON departments FOR SELECT USING (true);
 
-CREATE POLICY "Allow public read on metadata" ON departments FOR SELECT USING (true);
-CREATE POLICY "Allow public read on sub_roles" ON sub_roles FOR SELECT USING (true);
-CREATE POLICY "Admins full access to analytics" ON question_analytics FOR ALL USING (true);
+DROP POLICY IF EXISTS "public_read_subs" ON sub_roles;
+CREATE POLICY "public_read_subs" ON sub_roles FOR SELECT USING (true);
 
--- Done!
-SELECT count(*) as total_questions FROM questions WHERE is_latest = true;
+DROP POLICY IF EXISTS "admin_all_analytics" ON question_analytics;
+CREATE POLICY "admin_all_analytics" ON question_analytics FOR ALL USING (true);
+
+SELECT count(*) as result FROM questions WHERE is_latest = true;
