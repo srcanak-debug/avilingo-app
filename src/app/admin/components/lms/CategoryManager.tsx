@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { PILOT_SUB_CATEGORIES } from '@/lib/data/pilot-sub-categories'
 
 interface CourseCategory {
   id: string
@@ -10,7 +11,7 @@ interface CourseCategory {
 }
 
 const AVIATION_CATEGORIES: CourseCategory[] = [
-  { id: 'pilot', name: 'Pilot Courses', icon: '👨‍✈️', description: 'Type ratings, CRM, and ATPL refreshers.', courseCount: 12 },
+  { id: 'pilot', name: 'Pilot Courses', icon: '👨‍✈️', description: 'Type ratings, CRM, and ATPL refreshers.', courseCount: 26 },
   { id: 'cabin', name: 'Cabin Courses', icon: '💺', description: 'Safety, first aid, and service excellence.', courseCount: 8 },
   { id: 'technician', name: 'Technician Courses', icon: '⚙️', description: 'Maintenance, Part-66, and engine types.', courseCount: 15 },
   { id: 'ground', name: 'Ground Personnel', icon: '🏢', description: 'Check-in, security, and terminal ops.', courseCount: 6 },
@@ -22,6 +23,31 @@ const AVIATION_CATEGORIES: CourseCategory[] = [
 ]
 
 export default function CategoryManager() {
+  const [selectedMain, setSelectedMain] = useState<string | null>(null)
+
+  if (selectedMain === 'pilot') {
+    return (
+      <div style={{ padding: '24px', background: '#fff', borderRadius: '16px', border: '1px solid var(--bdr)', animation: 'drawerSlideIn 0.3s ease-out' }}>
+         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+            <button onClick={() => setSelectedMain(null)} style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--bdr)', background: '#fff', cursor: 'pointer', fontWeight: 800 }}>← Back</button>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--navy)', margin: 0 }}>Pilot Fleet & Courses</h2>
+         </div>
+
+         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
+            {PILOT_SUB_CATEGORIES.map(sub => (
+              <div key={sub.id} style={{ 
+                background: 'var(--off)', borderRadius: '12px', padding: '16px', border: '1px solid var(--bdr)', 
+                display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', transition: 'all 0.2s' 
+              }} onMouseOver={e => e.currentTarget.style.background = '#fff'}>
+                <span style={{ fontSize: '20px' }}>{sub.icon}</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--navy)' }}>{sub.name}</span>
+              </div>
+            ))}
+         </div>
+      </div>
+    )
+  }
+
   return (
     <div style={{ padding: '24px', background: '#fff', borderRadius: '16px', border: '1px solid var(--bdr)', animation: 'drawerSlideIn 0.4s ease-out' }}>
       <div style={{ marginBottom: '24px' }}>
@@ -31,7 +57,12 @@ export default function CategoryManager() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
         {AVIATION_CATEGORIES.map(cat => (
-          <div key={cat.id} style={{ background: 'var(--off)', borderRadius: '16px', padding: '20px', border: '1px solid var(--bdr)', cursor: 'pointer', transition: 'transform 0.2s' }} onMouseOver={e => e.currentTarget.style.transform = 'translateY(-4px)'} onMouseOut={e => e.currentTarget.style.transform = 'none'}>
+          <div key={cat.id} 
+            onClick={() => cat.id === 'pilot' && setSelectedMain('pilot')}
+            style={{ background: 'var(--off)', borderRadius: '16px', padding: '20px', border: '1px solid var(--bdr)', cursor: 'pointer', transition: 'transform 0.2s' }} 
+            onMouseOver={e => e.currentTarget.style.transform = 'translateY(-4px)'} 
+            onMouseOut={e => e.currentTarget.style.transform = 'none'}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <div style={{ fontSize: '24px' }}>{cat.icon}</div>
               <div>
