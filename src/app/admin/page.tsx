@@ -101,6 +101,7 @@ const navGroups: NavGroup[] = [
       { id: 'organizations', label: 'Organizations', icon: '🏢' },
       { id: 'users', label: 'Users & Candidates', icon: '👥' },
       { id: 'audit', label: 'Audit Logs', icon: '📜' },
+      { id: 'hr_analytics', label: 'HR Analytics', icon: '📊' },
     ]
   }
 ]
@@ -839,7 +840,11 @@ export default function AdminDashboard() {
                 {group.items.map(item => (
                   <button 
                     key={item.id} 
-                    onClick={() => !item.disabled && setActiveSection(item.id)} 
+                    onClick={() => {
+                      if (item.disabled) return
+                      if (item.id === 'hr_analytics') return router.push('/hr/analytics')
+                      setActiveSection(item.id)
+                    }}
                     disabled={item.disabled}
                     style={{
                       display:'flex',alignItems:'center',gap:'10px',width:'100%',textAlign:'left',

@@ -33,6 +33,11 @@ export default function AdminExamReviewPage() {
   async function checkAuth() {
     const aid = localStorage.getItem('adminId')
     const arole = localStorage.getItem('adminRole')
+    
+    // Sync to cookies for Middleware support
+    if (aid) document.cookie = `adminId=${aid}; path=/; max-age=86400`
+    if (arole) document.cookie = `adminRole=${arole}; path=/; max-age=86400`
+
     if(!aid || !['super_admin', 'assessor', 'hr'].includes(arole || '')) {
       router.push('/login')
       return

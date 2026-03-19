@@ -35,6 +35,14 @@ export default function Login() {
       role = 'candidate'
     }
 
+    if (['super_admin', 'hr_manager', 'evaluator', 'instructor'].includes(role || '')) {
+      localStorage.setItem('adminId', data.user.id)
+      localStorage.setItem('adminRole', role || '')
+      // Sync to cookies for Middleware
+      document.cookie = `adminId=${data.user.id}; path=/; max-age=86400`
+      document.cookie = `adminRole=${role}; path=/; max-age=86400`
+    }
+
     if (role === 'super_admin') router.push('/admin')
     else if (role === 'hr_manager') router.push('/hr')
     else if (role === 'instructor') router.push('/instructor')

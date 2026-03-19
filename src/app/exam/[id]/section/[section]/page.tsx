@@ -2,6 +2,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useFaceDetector } from '@/hooks/useFaceDetector'
+import { queueAnswer, flushQueue, restoreAnswers } from '@/lib/offlineSync'
 
 /* ═══ BRAND ═══ */
 const BRAND = {
@@ -87,6 +89,17 @@ export default function ExamSectionPage() {
   useEffect(() => { stRef.current = strikes }, [strikes])
 
   /* ═══ LOAD ═══ */
+  // ── Offline sync: flush queue on reconnect ───────────────────────
+  useEffect(() => {
+    const handleOnline = () => {
+      flushQueue(async (rows) => {
+        await supabase.from('exam_answers').upsert(rows, { onConflict: 'exam_id,question_id' })
+      })
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [])
+
   useEffect(() => { load() }, [])
 
   async function load() {
@@ -98,6 +111,12 @@ export default function ExamSectionPage() {
       if (!ed || ed.status === 'invalidated') return router.push('/exam')
       if (ed.status === 'completed') return router.push(`/exam/${examId}/complete`)
       setExam(ed)
+
+      // Restore unsaved answers from localStorage (offline recovery)
+      const localAnswers = restoreAnswers(examId)
+      if (Object.keys(localAnswers).length > 0) {
+        setAnswers(p => ({ ...localAnswers, ...p }))
+      }
 
       const t = ed.exam_templates, cnt = t[`${section}_count`] || 10
       const roleProfile = t.role_profile || 'general'
@@ -292,6 +311,17 @@ export default function ExamSectionPage() {
     }
   })
 
+  /* ═══ AI FACE DETECTION (client-side, zero cost) ═══ */
+  useFaceDetector({
+    videoRef: vidRef,
+    examId,
+    enabled: (phase === 'exam' || phase === 'writing-prep') && !!cam,
+    onViolation: (type) => {
+      // Persist to violations table (same pipeline as tab-switch)
+      strike(type)
+    },
+  })
+
   /* ═══ PROCTORING PERIODIC PHOTO ═══ */
   const procTimer = useRef<any>(null)
   const procCanvas = useRef<HTMLCanvasElement|null>(null)
@@ -360,7 +390,15 @@ export default function ExamSectionPage() {
   }
 
   async function saveAns(qid: string, ans: string) {
-    await supabase.from('exam_answers').upsert({ exam_id: examId, question_id: qid, section, answer: ans, time_spent_ms: 0 }, { onConflict: 'exam_id,question_id' })
+    const autoScore = ['grammar','reading','listening'].includes(section)
+      ? (questions.find((q:any) => q.id === qid)?.correct_answer?.trim().toLowerCase() === ans.trim().toLowerCase() ? 1 : 0)
+      : null
+    // 1. Always save locally first (works offline)
+    queueAnswer({ examId, questionId: qid, section, answer: ans, timeSpentMs: 0, autoScore })
+    // 2. Try Supabase (no await — fire-and-forget, re-synced on reconnect)
+    supabase.from('exam_answers')
+      .upsert({ exam_id: examId, question_id: qid, section, answer: ans, time_spent_ms: 0, auto_score: autoScore }, { onConflict: 'exam_id,question_id' })
+      .then(({ error }) => { if (!error) { /* remove from queue on success */ } })
   }
 
   async function timeUp() {
