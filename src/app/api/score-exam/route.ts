@@ -162,6 +162,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Automated Usage Tracking
+    if (answers?.length) {
+      for (const ans of answers) {
+        if (!ans.question_id) continue
+        const isCorrect = (ans.auto_score || 0) >= 1
+        
+        // Use a raw SQL increment or fetch/update
+        // Since we are in a route, we'll try a simple update first
+        // Ideally this should be a single bulk RPC call for performance
+        try {
+          const { data: current } = await supabase.from('question_analytics').select('total_attempts,correct_count').eq('question_id', ans.question_id).single()
+          if (current) {
+            await supabase.from('question_analytics').update({
+              total_attempts: (current.total_attempts || 0) + 1,
+              correct_count: (current.correct_count || 0) + (isCorrect ? 1 : 0),
+              last_used_at: new Date().toISOString()
+            }).eq('question_id', ans.question_id)
+          } else {
+             await supabase.from('question_analytics').insert({
+               question_id: ans.question_id,
+               total_attempts: 1,
+               correct_count: isCorrect ? 1 : 0,
+               last_used_at: new Date().toISOString()
+             })
+          }
+        } catch (err) {
+          console.error(`Analytics update failed for ${ans.question_id}:`, err)
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       examId,

@@ -107,7 +107,7 @@ const navGroups: NavGroup[] = [
 ]
 
 const sectionColors: Record<string,string> = {
-  grammar:'#3A8ED0', reading:'#0A8870', writing:'#B8881A', speaking:'#B83040', listening:'#7C3AED'
+  grammar:'#3A8ED0', reading:'#0A8870', writing:'#B8881A', speaking:'#B83040', listening:'#7C3AED', dla:'#10B981'
 }
 
 const COMPETENCY_TAGS: Record<string,string[]> = {
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
   const [showProfile, setShowProfile] = useState(false)
 
   // Constants for V3
-  const sections = ['grammar','reading','writing','speaking','listening']
+  const sections = ['grammar','reading','writing','speaking','listening','dla']
   const cefrLevels = ['A1','A2','B1','B2','C1','C2']
   const inp = (extra:any={}) => ({
     padding:'10px 14px', borderRadius:'10px', border:'1.5px solid var(--bdr)', 
@@ -190,7 +190,8 @@ export default function AdminDashboard() {
   const [formQ, setFormQ] = useState({
     section:'grammar', type:'multiple_choice', content:'',
     correct_answer:'', cefr_level:'B1', difficulty:'medium',
-    competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general'
+    competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general',
+    dla_section: 'general', reading_text: '', answer_time_sec: 75
   })
   const [options, setOptions] = useState([
     {text:'',is_correct:false},{text:'',is_correct:false},
@@ -332,7 +333,7 @@ export default function AdminDashboard() {
 
     // V3: Live Monitor
     const { count: activeExams } = await supabase.from('exams').select('id', { count: 'exact', head: true }).eq('status', 'in_progress')
-    setLiveMonitor({ activeExams: activeExams || 0, candidatesOnline: Math.max(0, (activeExams || 0) + 2) /* Simulated online count */ })
+    setLiveMonitor({ activeExams: activeExams || 0, candidatesOnline: activeExams || 0 })
   }
 
   async function loadTaxonomy() {
@@ -439,9 +440,27 @@ export default function AdminDashboard() {
 
   function startBulkDelete() {
     const items = questions.filter(q=>selectedQIds.includes(q.id))
-    setDelItems(items)
+    setDelItems(items.map(i=>({ ...i, _id:i.id, _type:'question', _display:i.content })))
     setDelInput('')
     setShowDelConfirm(true)
+  }
+
+  async function bulkToggleActive(active: boolean) {
+    if (selectedQIds.length === 0) return
+    setQLoading(true)
+    const { error } = await supabase
+      .from('questions')
+      .update({ active })
+      .in('id', selectedQIds)
+    
+    if (error) {
+       console.error('Bulk Toggle Error:', error)
+       alert('Toplu güncelleme sırasında hata oluştu: ' + error.message)
+    } else {
+       setSelectedQIds([])
+       runQuery(qPage)
+    }
+    setQLoading(false)
   }
 
   function startSingleDeleteTemplate(t: any) {
@@ -547,7 +566,8 @@ export default function AdminDashboard() {
   }
 
   function resetForm() {
-    setEditQ(null); setQStep(1); setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general' });         setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([]);
+    setEditQ(null); setQStep(1); setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general', dla_section: 'general', reading_text: '', answer_time_sec: 75 });
+    setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([]);
     setEditTemplate(null); setNewTemplate({ name:'', role_profile:'general', grammar_count:15, reading_count:5, writing_count:3, speaking_count:4, listening_count:8, weight_grammar:10, weight_reading:20, weight_writing:20, weight_speaking:40, weight_listening:10, time_limit_mins:90, writing_timer_mins:3.5, speaking_attempts:3, listening_single_play:true, passing_cefr:'B2', proctoring_enabled:true, attempts_allowed:1, org_id:null });
     setEditUser(null); setFormUser({ full_name:'', email:'', role:'candidate', org_id:'', phone:'', country:'' });
     setEditOrg(null); setFormOrg({ name:'', domain:'', logo_url:'', contact_person:'', contact_email:'', contract_end_date:'' });
@@ -562,7 +582,11 @@ export default function AdminDashboard() {
   async function saveQuestion() {
     if (!formQ.content.trim()) return
     setSaving(true)
-    const payload = { ...formQ, created_by: adminId, updated_by: adminId }
+    const payload = { ...formQ,
+      created_by: adminId,
+      updated_by: adminId,
+      is_dla: formQ.section === 'dla'
+    }
     let qId = editQ?.id
 
     if (editQ) {
@@ -625,7 +649,13 @@ export default function AdminDashboard() {
 
   function startEdit(q: any) {
     setEditQ(q)
-    setFormQ({ section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'', cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'', aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', image_url:q.image_url||'', active:q.active, role_tag:q.role_tag||'general' })
+    setFormQ({
+      section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'',
+      cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'',
+      aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', image_url:q.image_url||'',
+      active:q.active, role_tag:q.role_tag||'general',
+      dla_section: q.dla_section || 'general', reading_text: q.reading_text || '', answer_time_sec: q.answer_time_sec || 75
+    })
     setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}])
   }
 
@@ -940,6 +970,7 @@ export default function AdminDashboard() {
               resetForm={resetForm} exportQuestions={exportQuestions} loadAIFile={loadAIFile}
               runAITagging={runAITagging} approveAll={approveAll} handleFileUpload={handleFileUpload}
               parseText={parseText} confirmBulkUpload={confirmBulkUpload} setDetailQ={setDetailQ}
+              bulkToggleActive={bulkToggleActive}
             />
           )}
 
@@ -1249,9 +1280,26 @@ export default function AdminDashboard() {
                         </div>
                         <div>
                           <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Type</label>
-                          <select value={formQ.type} onChange={e=>setFormQ({...formQ,type:e.target.value})} style={inp({width:'100%'})}>{[['multiple_choice','Multiple Choice'],['fill_blank','Fill in Blank'],['audio_response','Audio Response'],['written_response','Written Response'],['listening','Listening'],['picture_description','Picture Description']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}</select>
+                          <select value={formQ.type} onChange={e=>setFormQ({...formQ,type:e.target.value})} style={inp({width:'100%'})}>
+                            {[['multiple_choice','Multiple Choice'],['fill_blank','Fill in Blank'],['audio_response','Audio Response'],['written_response','Written Response'],['listening','Listening'],['picture_description','Picture Description'],['dla_simulation','DLA Simulation (Automatic Phase)']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}
+                          </select>
                         </div>
                       </div>
+
+                      {formQ.section === 'dla' && (
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'12px'}}>
+                          <div>
+                            <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>DLA Section</label>
+                            <select value={formQ.dla_section} onChange={e=>setFormQ({...formQ,dla_section:e.target.value})} style={inp({width:'100%'})}>
+                              {[['general','General Questions'],['picture','Picture Description'],['scenario','Emergency Scenarios'],['retell','Retell Passage']].map(o=><option key={o[0]} value={o[0]}>{o[1]}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Answer Time (sec)</label>
+                            <input type="number" value={formQ.answer_time_sec} onChange={e=>setFormQ({...formQ,answer_time_sec:+e.target.value})} style={inp({width:'100%'})} />
+                          </div>
+                        </div>
+                      )}
 
                       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
                         <div>
@@ -1410,7 +1458,6 @@ export default function AdminDashboard() {
           </div>
         </>
       )}
-        </div>
       </div>
   )
 
