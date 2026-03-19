@@ -122,7 +122,28 @@ export default function PublicRegisterPage() {
           <strong>{template?.name}</strong> için başvurunuz onaylandı.
           Giriş detayları e-posta adresinize (<strong>{formData.email}</strong>) gönderildi.
         </p>
-        <div style={{ marginTop: '24px', fontSize: '12px', color: '#64748B' }}>
+        
+        <div style={{ marginTop: '32px' }}>
+          <button 
+            onClick={() => router.push(`/exam/${token}/preflight`)}
+            style={{
+              padding: '16px 32px',
+              borderRadius: '16px',
+              border: 'none',
+              background: '#0EA5E9',
+              color: '#fff',
+              fontSize: '16px',
+              fontWeight: 800,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              boxShadow: '0 10px 25px rgba(14,165,233,0.3)'
+            }}
+          >
+            Sınavı Hemen Başlat →
+          </button>
+        </div>
+
+        <div style={{ marginTop: '24px', fontSize: '13px', color: '#64748B' }}>
           Lütfen gelen kutunuzu (ve gereksiz kutusunu) kontrol edin.
         </div>
       </div>
@@ -221,44 +242,47 @@ export default function PublicRegisterPage() {
 // Styles
 const containerStyle: React.CSSProperties = {
   minHeight: '100vh',
-  background: '#F8FAFC',
+  background: 'linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 100%)',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
   justifyContent: 'center',
   padding: '40px 20px',
-  fontFamily: 'Inter, system-ui, sans-serif'
+  fontFamily: 'var(--fb, Inter, system-ui, sans-serif)'
 }
 
 const centerStyle: React.CSSProperties = {
   minHeight: '100vh',
   display: 'flex',
   alignItems: 'center',
-  justifyContent: 'center'
+  justifyContent: 'center',
+  background: 'linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 100%)',
 }
 
 const cardStyle: React.CSSProperties = {
-  background: '#fff',
+  background: 'rgba(255, 255, 255, 0.8)',
+  backdropFilter: 'blur(12px)',
   borderRadius: '32px',
   padding: '48px',
   width: '100%',
   maxWidth: '520px',
-  boxShadow: '0 20px 50px rgba(0,0,0,0.04)',
-  border: '1px solid #E2E8F0',
+  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.1)',
+  border: '1px solid rgba(255, 255, 255, 0.4)',
   textAlign: 'center' as any
 }
 
 const titleStyle: React.CSSProperties = {
-  fontSize: '24px',
+  fontSize: '28px',
   fontWeight: 900,
   color: '#0C1F3F',
   marginBottom: '16px',
-  letterSpacing: '-0.02em'
+  letterSpacing: '-0.02em',
+  fontFamily: 'var(--fm, inherit)'
 }
 
 const textStyle: React.CSSProperties = {
-  fontSize: '15px',
-  color: '#64748B',
+  fontSize: '16px',
+  color: '#475569',
   lineHeight: 1.6
 }
 
@@ -278,11 +302,12 @@ const labelStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '14px 20px',
+  padding: '16px 20px',
   borderRadius: '16px',
   border: '1.5px solid #E2E8F0',
   fontSize: '15px',
   outline: 'none',
-  transition: 'border-color 0.2s',
+  transition: 'all 0.2s',
+  background: '#fff',
   fontFamily: 'inherit'
 }

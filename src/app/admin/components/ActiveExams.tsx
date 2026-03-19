@@ -29,6 +29,20 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
 
   const loadExams = useCallback(async () => {
     setLoading(true)
+    
+    let candidateIds: string[] = []
+    if (searchTerm) {
+      // 1. Fetch users that match search
+      const { data: matchedUsers } = await supabase
+        .from('users')
+        .select('id')
+        .or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`)
+      
+      if (matchedUsers) {
+        candidateIds = matchedUsers.map(u => u.id)
+      }
+    }
+
     let query = supabase
       .from('exams')
       .select('*, organizations(name, logo_url), users!exams_candidate_id_fkey(id, full_name, email, phone, country), exam_templates(name, passing_cefr, role_profile)', { count: 'exact' })
@@ -41,6 +55,15 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
       else query = query.eq('status', filter)
     }
 
+    if (searchTerm) {
+      // 2. Filter exams by exam ID OR candidate IDs found above
+      if (candidateIds.length > 0) {
+        query = query.or(`id.ilike.%${searchTerm}%,candidate_id.in.(${candidateIds.join(',')})`)
+      } else {
+        query = query.ilike('id', `%${searchTerm}%`)
+      }
+    }
+
     const { data, error, count } = await query
     if (error) console.error('Error loading exams:', error.message)
     else {
@@ -48,7 +71,7 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
       setTotalCount(count || 0)
     }
     setLoading(false)
-  }, [filter, page, pageSize])
+  }, [filter, page, pageSize, searchTerm])
 
   useEffect(() => {
     loadExams()
@@ -88,15 +111,8 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
     else loadExams()
   }
 
-  const filteredExams = exams.filter(e => {
-    const search = searchTerm.toLowerCase()
-    return (
-      (e.users?.full_name?.toLowerCase() || '').includes(search) ||
-      (e.organizations?.name?.toLowerCase() || '').includes(search) ||
-      (e.exam_templates?.name?.toLowerCase() || '').includes(search) ||
-      (e.id?.toLowerCase() || '').includes(search)
-    )
-  })
+  // removed in-memory search as it is now server-side
+  const displayExams = exams
 
   // Helper for Section counts
   const getDistribution = (exam: any) => ({
@@ -206,7 +222,7 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
           <div>Yükleniyor...</div>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
-      ) : filteredExams.length === 0 ? (
+      ) : displayExams.length === 0 ? (
         <div style={{ background: 'rgba(255,255,255,0.5)', borderRadius: '32px', padding: '100px', border: '1px dashed var(--bdr)', textAlign: 'center' }}>
           <div style={{ fontSize: '64px', marginBottom: '24px' }}>📋</div>
           <h3 style={{ fontSize: '20px', fontWeight: 900, color: 'var(--navy)', marginBottom: '12px' }}>Arama sonucunda sınav bulunamadı</h3>
@@ -215,7 +231,7 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(500px, 1fr))', gap: '24px' }}>
-            {filteredExams.map(exam => {
+            {displayExams.map((exam: any) => {
               const dist = getDistribution(exam)
               const isPassive = exam.status === 'cancelled'
               const isLocked = exam.is_locked

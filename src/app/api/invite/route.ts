@@ -43,6 +43,7 @@ export async function POST(req: Request) {
 
       switch (type) {
         case 'REGISTRATION_RECEIVED':
+          magicLink = await getLink()
           subject = `Avilingo: ${templateName} Sınav Kaydınız Alındı`
           html = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
@@ -52,8 +53,11 @@ export async function POST(req: Request) {
               <div style="padding: 40px 30px;">
                 <h2>Sayın ${exam.candidate_name},</h2>
                 <p><strong>${templateName}</strong> için kaydınız başarıyla alınmıştır.</p>
-                <p>E-posta adresiniz doğrulanmıştır. Sınavınız hazır olduğunda size yeni bir bilgilendirme gönderilecektir.</p>
-                <p>Başarılar dileriz.</p>
+                <p>Aşağıdaki butona tıklayarak sınavınıza hemen başlayabilirsiniz:</p>
+                <div style="text-align: center; margin-top: 30px;">
+                  <a href="${magicLink}" style="background: #0EA5E9; color: #fff; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Sınava Şimdi Başla</a>
+                </div>
+                <p style="margin-top: 30px; font-size: 13px; color: #666;">Bu bağlantı size özeldir, lütfen başkalarıyla paylaşmayın.</p>
               </div>
             </div>
           `
