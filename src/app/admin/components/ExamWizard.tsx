@@ -136,11 +136,30 @@ export default function ExamWizard({ onClose, editId: propEditId }: { onClose: (
   useEffect(() => { init() }, [])
 
   async function init() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push('/login'); return }
-    const { data: u } = await supabase.from('users').select('role,full_name').eq('id', user.id).single()
-    if (u?.role !== 'super_admin') { router.push('/login'); return }
-    setAdminId(user.id)
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        console.warn('ExamWizard: No active session found.')
+        setLoading(false)
+        return
+      }
+      
+      setAdminId(user.id)
+
+      const { data: u, error: roleError } = await supabase
+        .from('users')
+        .select('role,full_name')
+        .eq('id', user.id)
+        .single()
+      
+      if (roleError) {
+        console.error('ExamWizard: Error fetching user role:', roleError.message)
+      } else if (!['super_admin', 'hr_manager', 'evaluator', 'instructor'].includes(u?.role || '')) {
+        console.warn('ExamWizard: Unauthorized role access attempt:', u?.role)
+      }
+    } catch (err) {
+      console.error('ExamWizard init error:', err)
+    }
 
     // Load orgs
     const { data: orgData } = await supabase.from('organizations').select('id,name').order('name')

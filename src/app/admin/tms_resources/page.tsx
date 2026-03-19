@@ -6,7 +6,7 @@ export default function PlaceholderPage() {
     <div style={{ animation: 'fadeIn 0.5s ease-out' }}>
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontFamily: 'var(--fm)', fontSize: '24px', fontWeight: 900, color: 'var(--navy)', marginBottom: '8px', textTransform: 'capitalize' }}>
-          audit
+          tms resources
         </h1>
         <p style={{ fontSize: '14px', color: 'var(--t3)' }}>This module is currently being migrated to the new architecture.</p>
       </div>
