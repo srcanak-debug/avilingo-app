@@ -44,7 +44,7 @@ export default function LessonPlayer() {
   }, [lessons])
 
   return (
-    <div style={{ display: 'flex', height: '100%', minHeight: '650px', background: 'var(--navy)', borderRadius: '16px', overflow: 'hidden', animation: 'drawerSlideIn 0.4s ease-out' }}>
+    <div style={{ display: 'flex', height: '100%', minHeight: '650px', background: 'var(--navy)', borderRadius: '16px', overflow: 'hidden' }}>
       
       {/* Sidebar: Technical Outline */}
       <div style={{ width: '320px', background: 'rgba(15, 23, 42, 0.95)', borderRight: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column' }}>
@@ -114,8 +114,7 @@ export default function LessonPlayer() {
             border: '1px solid rgba(255,255,255,0.1)',
             padding: '48px',
             display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)'
+            flexDirection: 'column'
           }}>
              <h1 style={{ color: '#fff', fontSize: '32px', fontWeight: 800, marginBottom: '32px', borderLeft: '6px solid #3b82f6', paddingLeft: '24px' }}>{activeLesson.title}</h1>
              
@@ -138,7 +137,6 @@ export default function LessonPlayer() {
                   <div style={{ textAlign: 'center', marginTop: '60px' }}>
                     <div style={{ fontSize: '64px', marginBottom: '24px' }}>🚀</div>
                     <div style={{ color: '#fff', fontSize: '20px', fontWeight: 700 }}>Initializing Masterclass Content...</div>
-                    <p style={{ color: 'rgba(255,255,255,0.5)', marginTop: '12px' }}>Loading authoritative aviation data sources.</p>
                   </div>
                 )}
              </div>
@@ -159,22 +157,15 @@ export default function LessonPlayer() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', position: 'relative' }}>
                <div style={{ width: '22%', height: '100%', background: '#3b82f6', borderRadius: '2px' }} />
-               <div style={{ position: 'absolute', left: '22%', top: '50%', transform: 'translate(-50%, -50%)', width: '12px', height: '12px', background: '#3b82f6', borderRadius: '50%', border: '3px solid #fff' }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
-               <span>08:15</span>
-               <span>{activeCourse.duration}</span>
             </div>
           </div>
           
           <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
              <button style={{ background: 'none', border: 'none', color: '#fff', fontSize: '18px', cursor: 'pointer', opacity: 0.7 }}>💬</button>
-             <button style={{ background: 'none', border: 'none', color: '#fff', fontSize: '18px', cursor: 'pointer', opacity: 0.7 }}>⚙️</button>
              <button style={{ background: 'none', border: 'none', color: '#fff', fontSize: '20px', cursor: 'pointer' }}>⛶</button>
           </div>
         </div>
       </div>
-
     </div>
   )
 }
