@@ -4,6 +4,12 @@ import Image from 'next/image'
 interface OrganizationListProps {
   orgList: any[]
   oLoading: boolean
+  oSearch: string
+  oTotal: number
+  oPage: number
+  setOSearch: (v: string) => void
+  setOPage: (v: number) => void
+  loadOrgs: (page: number, search: string) => void
   setEditOrg: (o: any) => void
   setFormOrg: (f: any) => void
   setShowOrgForm: (v: boolean) => void
@@ -14,7 +20,8 @@ interface OrganizationListProps {
 }
 
 export default function OrganizationList({ 
-  orgList, oLoading, setEditOrg, setFormOrg, setShowOrgForm, setDetailOrg, setOrgStep, startEditOrg, startSingleDeleteOrg 
+  orgList, oLoading, oSearch, oTotal, oPage, setOSearch, setOPage, loadOrgs,
+  setEditOrg, setFormOrg, setShowOrgForm, setDetailOrg, setOrgStep, startEditOrg, startSingleDeleteOrg 
 }: OrganizationListProps) {
   return (
     <div style={{animation:'drawerSlideIn 0.4s ease-out'}}>

@@ -20,6 +20,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: "dashboard", label: "Dashboard", icon: "📊" },
       { id: "questions", label: "Question Bank", icon: "📚" },
+      { id: "templates", label: "Exam Templates", icon: "📋" },
       { id: "active_exams", label: "Active Exams", icon: "📝" },
       { id: "reports", label: "Reports", icon: "📈" },
     ],

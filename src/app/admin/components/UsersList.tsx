@@ -4,7 +4,10 @@ interface UsersListProps {
   userList: any[]
   uLoading: boolean
   uSearch: string
+  uTotal: number
+  uPage: number
   setUSearch: (v: string) => void
+  setUPage: (v: number) => void
   loadUsers: (page: number, search: string) => void
   setEditUser: (u: any) => void
   setFormUser: (f: any) => void
@@ -12,7 +15,10 @@ interface UsersListProps {
   setDetailUser: (u: any) => void
 }
 
-export default function UsersList({ userList, uLoading, uSearch, setUSearch, loadUsers, setEditUser, setFormUser, setShowUserForm, setDetailUser }: UsersListProps) {
+export default function UsersList({ 
+  userList, uLoading, uSearch, uTotal, uPage, setUSearch, setUPage, loadUsers, 
+  setEditUser, setFormUser, setShowUserForm, setDetailUser 
+}: UsersListProps) {
   const inp = (extra:any={}) => ({
     padding:'10px 14px', borderRadius:'10px', border:'1.5px solid var(--bdr)', 
     fontSize:'13.5px', fontWeight:600, color:'var(--navy)', outline:'none',

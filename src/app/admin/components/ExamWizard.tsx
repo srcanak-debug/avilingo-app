@@ -4,23 +4,23 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 // ─── CONSTANTS ───
-const SECTIONS = ['grammar','reading','writing','speaking','listening'] as const
+const SECTIONS = ['grammar','reading','writing','speaking','listening','dla'] as const
 type Section = typeof SECTIONS[number]
 
 const sectionColors: Record<string,string> = {
-  grammar:'#3A8ED0', reading:'#0A8870', writing:'#B8881A', speaking:'#B83040', listening:'#7C3AED'
+  grammar:'#3A8ED0', reading:'#0A8870', writing:'#B8881A', speaking:'#B83040', listening:'#7C3AED', dla:'#10B981'
 }
 const sectionIcons: Record<string,string> = {
-  grammar:'Aa', reading:'📖', writing:'✍', speaking:'🎙', listening:'🎧'
+  grammar:'Aa', reading:'📖', writing:'✍', speaking:'🎙', listening:'🎧', dla:'🧠'
 }
 const CEFR_LEVELS = ['A1','A2','B1','B2','C1','C2']
 const ROLE_PROFILES: Record<string,{label:string, order:Section[], description:string}> = {
-  'general':      { label:'General', order:['grammar','reading','listening','writing','speaking'], description:'Standard aviation English proficiency assessment' },
-  'flight_deck':  { label:'Flight Deck', order:['grammar','reading','listening','writing','speaking'], description:'Pilots, co-pilots, flight engineers' },
-  'cabin_crew':   { label:'Cabin Crew', order:['grammar','listening','reading','speaking','writing'], description:'Flight attendants, cabin managers, pursers' },
-  'atc':          { label:'ATC', order:['grammar','listening','reading','speaking','writing'], description:'Air traffic controllers' },
-  'maintenance':  { label:'Maintenance', order:['grammar','reading','writing','listening','speaking'], description:'Aircraft maintenance engineers' },
-  'ground_staff': { label:'Ground Staff', order:['grammar','reading','listening','writing','speaking'], description:'Ground operations, ramp agents' },
+  'general':      { label:'General', order:['grammar','reading','listening','writing','speaking','dla'], description:'Standard aviation English proficiency assessment' },
+  'flight_deck':  { label:'Flight Deck', order:['grammar','reading','listening','writing','speaking','dla'], description:'Pilots, co-pilots, flight engineers' },
+  'cabin_crew':   { label:'Cabin Crew', order:['grammar','listening','reading','speaking','writing','dla'], description:'Flight attendants, cabin managers, pursers' },
+  'atc':          { label:'ATC', order:['grammar','listening','reading','speaking','writing','dla'], description:'Air traffic controllers' },
+  'maintenance':  { label:'Maintenance', order:['grammar','reading','writing','listening','speaking','dla'], description:'Aircraft maintenance engineers' },
+  'ground_staff': { label:'Ground Staff', order:['grammar','reading','listening','writing','speaking','dla'], description:'Ground operations, ramp agents' },
 }
 
 const DEFAULT_PREP: Record<Section, {seconds:number, bullets:string[]}> = {
@@ -29,6 +29,7 @@ const DEFAULT_PREP: Record<Section, {seconds:number, bullets:string[]}> = {
   writing:   { seconds: 45, bullets: ['Write at least 40 words for each question. Do not copy or paste from any source.','If time runs out, the system will automatically save your response.','Your movements, eye activity, and screen are being monitored.'] },
   speaking:  { seconds: 45, bullets: ['You must speak for at least 30 seconds to meet the minimum requirement.','Do not use written texts, memorized speeches, ChatGPT, or any other AI tools.','When you are ready, press the record button to start.'] },
   listening: { seconds: 45, bullets: ['Each audio will be played once only.','There are no penalties for wrong answers, so try to answer every question.','When you are ready, press the Play button to begin listening.'] },
+  dla:       { seconds: 60, bullets: ['The DLA section assesses multi-tasking and situational awareness.','Follow the on-screen instructions closely.','Your decisions and reaction times are being monitored.'] },
 }
 
 const STEPS = [
@@ -59,6 +60,8 @@ interface WizardData {
   weight_writing: number
   weight_speaking: number
   weight_listening: number
+  dla_count: number
+  weight_dla: number
   time_limit_mins: number
   writing_timer_mins: number
   speaking_attempts: number
@@ -75,6 +78,7 @@ interface WizardData {
   prep_writing: { seconds: number, bullets: string[] }
   prep_speaking: { seconds: number, bullets: string[] }
   prep_listening: { seconds: number, bullets: string[] }
+  prep_dla: { seconds: number, bullets: string[] }
   selected_candidates: string[]
   invite_message: string
   // New Fields
@@ -86,12 +90,14 @@ interface WizardData {
 const initialData: WizardData = {
   name: '', role_profile: 'general', org_id: null, description: '',
   grammar_count: 15, reading_count: 5, writing_count: 3, speaking_count: 4, listening_count: 8,
-  weight_grammar: 10, weight_reading: 20, weight_writing: 20, weight_speaking: 40, weight_listening: 10,
+  weight_grammar: 10, weight_reading: 20, weight_writing: 20, weight_speaking: 30, weight_listening: 10,
+  dla_count: 5, weight_dla: 10,
   time_limit_mins: 90, writing_timer_mins: 3.5, speaking_attempts: 3, listening_single_play: true,
   passing_cefr: 'B2', attempts_allowed: 1,
   proctoring_enabled: true, proctoring_webcam: true, proctoring_screen: true, proctoring_eye_track: true, max_violations: 3,
   prep_grammar: DEFAULT_PREP.grammar, prep_reading: DEFAULT_PREP.reading,
   prep_writing: DEFAULT_PREP.writing, prep_speaking: DEFAULT_PREP.speaking, prep_listening: DEFAULT_PREP.listening,
+  prep_dla: DEFAULT_PREP.dla,
   selected_candidates: [], invite_message: 'You have been invited to take an Aviation English Proficiency exam via Avilingo. Please click the link below to begin your assessment.',
   exam_type: 'corporate',
   registration_fields: { name: true, email: true, phone: true },
@@ -207,6 +213,9 @@ export default function ExamWizard({ onClose, editId: propEditId }: { onClose: (
           prep_writing: t.prep_writing || DEFAULT_PREP.writing,
           prep_speaking: t.prep_speaking || DEFAULT_PREP.speaking,
           prep_listening: t.prep_listening || DEFAULT_PREP.listening,
+          prep_dla: t.prep_dla || DEFAULT_PREP.dla,
+          dla_count: t.dla_count || 5,
+          weight_dla: t.weight_dla || 10,
           selected_candidates: [], invite_message: initialData.invite_message,
         })
       }
@@ -215,8 +224,8 @@ export default function ExamWizard({ onClose, editId: propEditId }: { onClose: (
   }
 
   // ─── DERIVED VALUES ───
-  const totalQuestions = data.grammar_count + data.reading_count + data.writing_count + data.speaking_count + data.listening_count
-  const totalWeight = data.weight_grammar + data.weight_reading + data.weight_writing + data.weight_speaking + data.weight_listening
+  const totalQuestions = data.grammar_count + data.reading_count + data.writing_count + data.speaking_count + data.listening_count + data.dla_count
+  const totalWeight = data.weight_grammar + data.weight_reading + data.weight_writing + data.weight_speaking + data.weight_listening + data.weight_dla
   const weightValid = Math.abs(totalWeight - 100) < 0.1
   const sectionOrder = ROLE_PROFILES[data.role_profile]?.order || SECTIONS
 
@@ -268,6 +277,8 @@ export default function ExamWizard({ onClose, editId: propEditId }: { onClose: (
       max_violations: data.max_violations,
       prep_grammar: data.prep_grammar, prep_reading: data.prep_reading,
       prep_writing: data.prep_writing, prep_speaking: data.prep_speaking, prep_listening: data.prep_listening,
+      prep_dla: data.prep_dla,
+      dla_count: data.dla_count, weight_dla: data.weight_dla,
       // New fields
       exam_type: data.exam_type,
       registration_fields: data.registration_fields,
