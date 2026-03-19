@@ -44,10 +44,10 @@ export default function LessonPlayer() {
   }, [lessons])
 
   return (
-    <div style={{ display: 'flex', height: '100%', minHeight: '650px', background: 'var(--navy)', borderRadius: '16px', overflow: 'hidden' }}>
+    <div id="lesson-player-root" style={{ display: 'flex', height: '100%', minHeight: '650px', background: '#0f172a', borderRadius: '16px', overflow: 'hidden' }}>
       
       {/* Sidebar: Technical Outline */}
-      <div style={{ width: '320px', background: 'rgba(15, 23, 42, 0.95)', borderRight: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: '320px', background: 'rgba(2, 6, 23, 0.5)', borderRight: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ padding: '24px', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Expert Masterclass</div>
           <h3 style={{ color: '#fff', fontSize: '15px', fontWeight: 800, margin: 0, lineHeight: 1.3 }}>{activeCourse.title}</h3>
@@ -63,6 +63,7 @@ export default function LessonPlayer() {
           {lessons.map(l => (
             <button 
               key={l.id} 
+              id={`lesson-item-${l.id}`}
               onClick={() => handleLessonClick(l)}
               style={{ 
                 width: '100%', 
@@ -142,7 +143,7 @@ export default function LessonPlayer() {
              </div>
 
              <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '24px' }}>
-                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 700 }}>Standard: {activeCourse.authoritative_sources?.[0] || 'ICAO/EASA'}</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 700 }}>Standard: ICAO / EASA OPS</span>
                 <span style={{ color: '#3b82f6', fontSize: '11px', fontWeight: 800 }}>AVILINGO CERTIFIED TRAINING</span>
              </div>
           </div>
