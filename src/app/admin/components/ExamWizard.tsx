@@ -90,8 +90,8 @@ interface WizardData {
 const initialData: WizardData = {
   name: '', role_profile: 'general', org_id: null, description: '',
   grammar_count: 15, reading_count: 5, writing_count: 3, speaking_count: 4, listening_count: 8,
-  weight_grammar: 10, weight_reading: 20, weight_writing: 20, weight_speaking: 30, weight_listening: 10,
-  dla_count: 5, weight_dla: 10,
+  weight_grammar: 10, weight_reading: 20, weight_writing: 20, weight_speaking: 40, weight_listening: 10,
+  dla_count: 5, weight_dla: 0,
   time_limit_mins: 90, writing_timer_mins: 3.5, speaking_attempts: 3, listening_single_play: true,
   passing_cefr: 'B2', attempts_allowed: 1,
   proctoring_enabled: true, proctoring_webcam: true, proctoring_screen: true, proctoring_eye_track: true, max_violations: 3,
@@ -182,9 +182,19 @@ export default function ExamWizard({ onClose, editId: propEditId }: { onClose: (
     // Load question counts per section (role-specific + general)
     const counts: Record<string,number> = {}
     for (const sec of SECTIONS) {
-      const { count: roleCount } = await supabase.from('questions').select('id',{count:'exact',head:true}).eq('section',sec).eq('active',true).eq('is_latest',true).eq('role_tag', data.role_profile || 'general')
-      const { count: generalCount } = await supabase.from('questions').select('id',{count:'exact',head:true}).eq('section',sec).eq('active',true).eq('is_latest',true).eq('role_tag', 'general')
-      counts[sec] = (roleCount || 0) + (generalCount || 0)
+      if (sec === 'dla') {
+        const { count: dlaCount } = await supabase.from('questions')
+          .select('id',{count:'exact',head:true}).eq('is_dla', true).eq('active',true).eq('is_latest',true)
+        counts[sec] = dlaCount || 0
+        continue
+      }
+      const { count: genCount } = await supabase.from('questions').select('id',{count:'exact',head:true}).eq('section',sec).eq('active',true).eq('is_latest',true).eq('role_tag', 'general')
+      let total = genCount || 0
+      if (data.role_profile && data.role_profile !== 'general') {
+        const { count: roleCount } = await supabase.from('questions').select('id',{count:'exact',head:true}).eq('section',sec).eq('active',true).eq('is_latest',true).eq('role_tag', data.role_profile)
+        total += (roleCount || 0)
+      }
+      counts[sec] = total
     }
     setQuestionCounts(counts)
 
@@ -225,7 +235,11 @@ export default function ExamWizard({ onClose, editId: propEditId }: { onClose: (
 
   // ─── DERIVED VALUES ───
   const totalQuestions = data.grammar_count + data.reading_count + data.writing_count + data.speaking_count + data.listening_count + data.dla_count
-  const totalWeight = data.weight_grammar + data.weight_reading + data.weight_writing + data.weight_speaking + data.weight_listening + data.weight_dla
+  const totalWeight = SECTIONS.reduce((acc, sec) => {
+    const count = data[`${sec}_count` as keyof WizardData] as number
+    const weight = data[`weight_${sec}` as keyof WizardData] as number
+    return acc + (count > 0 ? weight : 0)
+  }, 0)
   const weightValid = Math.abs(totalWeight - 100) < 0.1
   const sectionOrder = ROLE_PROFILES[data.role_profile]?.order || SECTIONS
 

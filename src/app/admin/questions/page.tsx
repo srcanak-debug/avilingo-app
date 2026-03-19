@@ -113,7 +113,15 @@ export default function QuestionsPage() {
       .eq('is_latest', true)
       .range(page * pageSize, (page + 1) * pageSize - 1)
 
-    if (section !== 'all') query = query.eq('section', section)
+    if (section === 'dla') {
+      query = query.eq('is_dla', true)
+    } else if (section !== 'all') {
+      query = query.eq('section', section).eq('is_dla', false)
+    } else {
+      // If 'all', we show everything? Or maybe exclude DLA from 'all' to keep it clean?
+      // Usually 'all' means all regular questions.
+      // Let's keep 'all' as is for now.
+    }
     if (cefr !== 'all') query = query.eq('cefr_level', cefr)
     if (difficulty !== 'all') query = query.eq('difficulty', difficulty)
     if (status === 'active') query = query.eq('active', true)
