@@ -2,12 +2,13 @@
 import { useState } from 'react'
 import { PILOT_COURSE_SEED } from '@/lib/data/pilot-seed'
 import { WXR_2100_COURSE } from '@/lib/data/courses/boeing-wxr-2100'
+import { TCAS_ACASII_COURSE } from '@/lib/data/courses/tcas-acas-v71'
 
 interface Course {
   id: string
   title: string
   category: string
-  format: 'SCORM' | 'Video' | 'PDF' | 'AI-Generated'
+  format: 'SCORM' | 'Video' | 'PDF' | 'AI-Generated' | 'Masterclass'
   duration: string
   enrolled: number
   status: 'active' | 'draft'
@@ -15,6 +16,15 @@ interface Course {
 
 export default function CourseLibrary() {
   const [courses, setCourses] = useState<Course[]>([
+    {
+      id: TCAS_ACASII_COURSE.id,
+      title: TCAS_ACASII_COURSE.title,
+      category: 'Pilot > Safety Masterclass',
+      format: 'Masterclass',
+      duration: TCAS_ACASII_COURSE.duration,
+      enrolled: 0,
+      status: 'active'
+    },
     {
       id: WXR_2100_COURSE.id,
       title: WXR_2100_COURSE.title,
