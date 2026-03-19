@@ -1,4 +1,5 @@
 'use client'
+import Image from 'next/image'
 
 interface OrganizationListProps {
   orgList: any[]
@@ -30,8 +31,8 @@ export default function OrganizationList({
           {orgList.map(o => (
             <div key={o.id} onClick={()=>{setDetailOrg(o);setShowOrgForm(false)}} style={{background:'#fff',borderRadius:'16px',padding:'20px',border:'1px solid var(--bdr)',cursor:'pointer',transition:'all 0.2s', position:'relative'}} >
               <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'16px'}}>
-                <div style={{width:'48px',height:'48px',borderRadius:'10px',background:'var(--off)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'20px',border:'1px solid var(--bdr)'}}>
-                  {o.logo_url ? <img alt={o.name} src={o.logo_url} style={{maxWidth:'100%',maxHeight:'100%',borderRadius:'8px'}} /> : '🏢'}
+                <div style={{width:'48px',height:'48px',borderRadius:'10px',background:'var(--off)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'20px',border:'1px solid var(--bdr)', overflow: 'hidden', position: 'relative'}}>
+                  {o.logo_url ? <Image alt={o.name} src={o.logo_url} fill style={{objectFit:'contain', padding: '4px'}} /> : '🏢'}
                 </div>
                 <div>
                   <div style={{fontWeight:800,color:'var(--navy)',fontSize:'15px'}}>{o.name}</div>

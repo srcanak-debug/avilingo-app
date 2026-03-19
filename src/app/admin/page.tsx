@@ -27,6 +27,9 @@ const AssessmentForms = dynamic(() => import('./components/ebt/AssessmentForms')
 // CompBT Components
 const AdaptiveLearning = dynamic(() => import('./components/compbt/AdaptiveLearning'))
 
+// Audit Components
+const AuditSystem = dynamic(() => import('./components/audit/AuditSystem'))
+
 interface NavItem {
   id: string
   label: string
@@ -859,6 +862,7 @@ export default function AdminDashboard() {
           {activeSection === 'lms_player' && <LessonPlayer />}
 
           {activeSection === 'compbt_adaptive' && <AdaptiveLearning />}
+          {activeSection === 'audit' && <AuditSystem />}
 
           {activeSection === 'questions' && (
             <QuestionBank 
