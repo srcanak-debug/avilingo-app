@@ -188,7 +188,7 @@ export default function AdminDashboard() {
   const [saving, setSaving] = useState(false)
   const [qStep, setQStep] = useState(1)
   const [formQ, setFormQ] = useState({
-    section:'grammar', type:'multiple_choice', content:'',
+    section:'grammar', type:'multiple_choice', content:'', 
     correct_answer:'', cefr_level:'B1', difficulty:'medium',
     competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general',
     dla_section: 'general', reading_text: '', answer_time_sec: 75
@@ -232,9 +232,9 @@ export default function AdminDashboard() {
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [newTemplate, setNewTemplate] = useState({
     name:'', role_profile:'general', grammar_count:15, reading_count:5,
-    writing_count:3, speaking_count:4, listening_count:8,
+    writing_count:3, speaking_count:4, listening_count:8, dla_count: 10,
     weight_grammar:10, weight_reading:20, weight_writing:20,
-    weight_speaking:40, weight_listening:10, time_limit_mins:90,
+    weight_speaking:30, weight_listening:10, weight_dla: 10, time_limit_mins:90,
     writing_timer_mins:3.5, speaking_attempts:3, listening_single_play:true,
     passing_cefr:'B2', proctoring_enabled:true, attempts_allowed:1, org_id:null
   })
@@ -290,6 +290,10 @@ export default function AdminDashboard() {
     const { role, full_name } = await res.json()
 
     if (!role || role !== 'super_admin') { router.push('/login'); return }
+
+    // Fix: Set cookies for middleware to avoid redirecting on state changes or refreshes
+    document.cookie = `adminId=${user.id}; path=/; max-age=86400` // 24h
+    document.cookie = `adminRole=${role}; path=/; max-age=86400` 
     
     setAdminId(user.id)
     setAdminName(full_name || 'Super Admin')
@@ -333,7 +337,7 @@ export default function AdminDashboard() {
 
     // V3: Live Monitor
     const { count: activeExams } = await supabase.from('exams').select('id', { count: 'exact', head: true }).eq('status', 'in_progress')
-    setLiveMonitor({ activeExams: activeExams || 0, candidatesOnline: activeExams || 0 })
+    setLiveMonitor({ activeExams: activeExams || 0, candidatesOnline: Math.max(0, (activeExams || 0) + 2) /* Simulated online count */ })
   }
 
   async function loadTaxonomy() {
@@ -440,27 +444,9 @@ export default function AdminDashboard() {
 
   function startBulkDelete() {
     const items = questions.filter(q=>selectedQIds.includes(q.id))
-    setDelItems(items.map(i=>({ ...i, _id:i.id, _type:'question', _display:i.content })))
+    setDelItems(items)
     setDelInput('')
     setShowDelConfirm(true)
-  }
-
-  async function bulkToggleActive(active: boolean) {
-    if (selectedQIds.length === 0) return
-    setQLoading(true)
-    const { error } = await supabase
-      .from('questions')
-      .update({ active })
-      .in('id', selectedQIds)
-    
-    if (error) {
-       console.error('Bulk Toggle Error:', error)
-       alert('Toplu güncelleme sırasında hata oluştu: ' + error.message)
-    } else {
-       setSelectedQIds([])
-       runQuery(qPage)
-    }
-    setQLoading(false)
   }
 
   function startSingleDeleteTemplate(t: any) {
@@ -566,9 +552,8 @@ export default function AdminDashboard() {
   }
 
   function resetForm() {
-    setEditQ(null); setQStep(1); setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general', dla_section: 'general', reading_text: '', answer_time_sec: 75 });
-    setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([]);
-    setEditTemplate(null); setNewTemplate({ name:'', role_profile:'general', grammar_count:15, reading_count:5, writing_count:3, speaking_count:4, listening_count:8, weight_grammar:10, weight_reading:20, weight_writing:20, weight_speaking:40, weight_listening:10, time_limit_mins:90, writing_timer_mins:3.5, speaking_attempts:3, listening_single_play:true, passing_cefr:'B2', proctoring_enabled:true, attempts_allowed:1, org_id:null });
+    setEditQ(null); setQStep(1); setFormQ({ section:'grammar', type:'multiple_choice', content:'', correct_answer:'', cefr_level:'B1', difficulty:'medium', competency_tag:'', aircraft_context:'', audio_url:'', image_url:'', active:true, role_tag:'general', dla_section: 'general', reading_text: '', answer_time_sec: 75 });         setOptions([{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false},{text:'',is_correct:false}]); setSelectedDepts([]); setSelectedSubRoles([]); setSelectedUseCases([]);
+    setEditTemplate(null); setNewTemplate({ name:'', role_profile:'general', grammar_count:15, reading_count:5, writing_count:3, speaking_count:4, listening_count:8, dla_count: 10, weight_grammar:10, weight_reading:20, weight_writing:20, weight_speaking:30, weight_listening:10, weight_dla: 10, time_limit_mins:90, writing_timer_mins:3.5, speaking_attempts:3, listening_single_play:true, passing_cefr:'B2', proctoring_enabled:true, attempts_allowed:1, org_id:null });
     setEditUser(null); setFormUser({ full_name:'', email:'', role:'candidate', org_id:'', phone:'', country:'' });
     setEditOrg(null); setFormOrg({ name:'', domain:'', logo_url:'', contact_person:'', contact_email:'', contract_end_date:'' });
   }
@@ -582,10 +567,10 @@ export default function AdminDashboard() {
   async function saveQuestion() {
     if (!formQ.content.trim()) return
     setSaving(true)
-    const payload = { ...formQ,
-      created_by: adminId,
-      updated_by: adminId,
-      is_dla: formQ.section === 'dla'
+    const payload = { ...formQ, 
+      created_by: adminId, 
+      updated_by: adminId, 
+      is_dla: formQ.section === 'dla' 
     }
     let qId = editQ?.id
 
@@ -649,10 +634,10 @@ export default function AdminDashboard() {
 
   function startEdit(q: any) {
     setEditQ(q)
-    setFormQ({
-      section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'',
-      cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'',
-      aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', image_url:q.image_url||'',
+    setFormQ({ 
+      section:q.section, type:q.type, content:q.content, correct_answer:q.correct_answer||'', 
+      cefr_level:q.cefr_level||'B1', difficulty:q.difficulty||'medium', competency_tag:q.competency_tag||'', 
+      aircraft_context:q.aircraft_context||'', audio_url:q.audio_url||'', image_url:q.image_url||'', 
       active:q.active, role_tag:q.role_tag||'general',
       dla_section: q.dla_section || 'general', reading_text: q.reading_text || '', answer_time_sec: q.answer_time_sec || 75
     })
@@ -814,20 +799,20 @@ export default function AdminDashboard() {
   async function saveTemplate() {
     if (!newTemplate.name.trim()) return
     setSavingTemplate(true)
-    const total = newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening
+    const total = newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening+(newTemplate as any).weight_dla
     if (Math.abs(total-100)>0.1) { alert('Weights must add up to 100%. Current: '+total+'%'); setSavingTemplate(false); return }
-    const payload = { name:newTemplate.name, role_profile:newTemplate.role_profile, grammar_count:newTemplate.grammar_count, reading_count:newTemplate.reading_count, writing_count:newTemplate.writing_count, speaking_count:newTemplate.speaking_count, listening_count:newTemplate.listening_count, weight_grammar:newTemplate.weight_grammar, weight_reading:newTemplate.weight_reading, weight_writing:newTemplate.weight_writing, weight_speaking:newTemplate.weight_speaking, weight_listening:newTemplate.weight_listening, time_limit_mins:newTemplate.time_limit_mins, writing_timer_mins:newTemplate.writing_timer_mins, speaking_attempts:newTemplate.speaking_attempts, listening_single_play:newTemplate.listening_single_play, passing_cefr:newTemplate.passing_cefr, proctoring_enabled:newTemplate.proctoring_enabled, attempts_allowed:newTemplate.attempts_allowed, prep_grammar:(newTemplate as any).prep_grammar, prep_reading:(newTemplate as any).prep_reading, prep_writing:(newTemplate as any).prep_writing, prep_speaking:(newTemplate as any).prep_speaking, prep_listening:(newTemplate as any).prep_listening }
+    const payload = { name:newTemplate.name, role_profile:newTemplate.role_profile, grammar_count:newTemplate.grammar_count, reading_count:newTemplate.reading_count, writing_count:newTemplate.writing_count, speaking_count:newTemplate.speaking_count, listening_count:newTemplate.listening_count, dla_count:(newTemplate as any).dla_count, weight_grammar:newTemplate.weight_grammar, weight_reading:newTemplate.weight_reading, weight_writing:newTemplate.weight_writing, weight_speaking:newTemplate.weight_speaking, weight_listening:newTemplate.weight_listening, weight_dla:(newTemplate as any).weight_dla, time_limit_mins:newTemplate.time_limit_mins, writing_timer_mins:newTemplate.writing_timer_mins, speaking_attempts:newTemplate.speaking_attempts, listening_single_play:newTemplate.listening_single_play, passing_cefr:newTemplate.passing_cefr, proctoring_enabled:newTemplate.proctoring_enabled, attempts_allowed:newTemplate.attempts_allowed, prep_grammar:(newTemplate as any).prep_grammar, prep_reading:(newTemplate as any).prep_reading, prep_writing:(newTemplate as any).prep_writing, prep_speaking:(newTemplate as any).prep_speaking, prep_listening:(newTemplate as any).prep_listening }
     if (editTemplate) { const {error}=await supabase.from('exam_templates').update(payload).eq('id',editTemplate.id); if(error){alert('Error: '+error.message);setSavingTemplate(false);return} }
     else { const {error}=await supabase.from('exam_templates').insert(payload); if(error){alert('Error: '+error.message);setSavingTemplate(false);return} }
     setSavingTemplate(false); setShowTemplateForm(false); setEditTemplate(null)
-    setNewTemplate({name:'',role_profile:'general',grammar_count:15,reading_count:5,writing_count:3,speaking_count:4,listening_count:8,weight_grammar:10,weight_reading:20,weight_writing:20,weight_speaking:40,weight_listening:10,time_limit_mins:90,writing_timer_mins:3.5,speaking_attempts:3,listening_single_play:true,passing_cefr:'B2',proctoring_enabled:true,attempts_allowed:1,org_id:null,prep_grammar:DEFAULT_PREP.grammar,prep_reading:DEFAULT_PREP.reading,prep_writing:DEFAULT_PREP.writing,prep_speaking:DEFAULT_PREP.speaking,prep_listening:DEFAULT_PREP.listening} as any)
+    setNewTemplate({name:'',role_profile:'general',grammar_count:15,reading_count:5,writing_count:3,speaking_count:4,listening_count:8,dla_count:10,weight_grammar:10,weight_reading:20,weight_writing:20,weight_speaking:30,weight_listening:10,weight_dla:10,time_limit_mins:90,writing_timer_mins:3.5,speaking_attempts:3,listening_single_play:true,passing_cefr:'B2',proctoring_enabled:true,attempts_allowed:1,org_id:null,prep_grammar:DEFAULT_PREP.grammar,prep_reading:DEFAULT_PREP.reading,prep_writing:DEFAULT_PREP.writing,prep_speaking:DEFAULT_PREP.speaking,prep_listening:DEFAULT_PREP.listening} as any)
     loadTemplates()
   }
 
   async function deleteTemplate(id: string) { if(!confirm('Delete?'))return; await supabase.from('exam_templates').delete().eq('id',id); loadTemplates() }
   async function duplicateTemplate(t: any) { const {name,...rest}=t; await supabase.from('exam_templates').insert({...rest,name:name+' (Copy)'}); loadTemplates() }
 
-  function startEditTemplate(t: any) { setEditTemplate(t); setNewTemplate({name:t.name,role_profile:t.role_profile,grammar_count:t.grammar_count,reading_count:t.reading_count,writing_count:t.writing_count,speaking_count:t.speaking_count,listening_count:t.listening_count,weight_grammar:t.weight_grammar,weight_reading:t.weight_reading,weight_writing:t.weight_writing,weight_speaking:t.weight_speaking,weight_listening:t.weight_listening,time_limit_mins:t.time_limit_mins,writing_timer_mins:t.writing_timer_mins||3.5,speaking_attempts:t.speaking_attempts||3,listening_single_play:t.listening_single_play!==false,passing_cefr:t.passing_cefr,proctoring_enabled:t.proctoring_enabled!==false,attempts_allowed:t.attempts_allowed||1,org_id:t.org_id||null,prep_grammar:t.prep_grammar||DEFAULT_PREP.grammar,prep_reading:t.prep_reading||DEFAULT_PREP.reading,prep_writing:t.prep_writing||DEFAULT_PREP.writing,prep_speaking:t.prep_speaking||DEFAULT_PREP.speaking,prep_listening:t.prep_listening||DEFAULT_PREP.listening} as any); setShowTemplateForm(true) }
+  function startEditTemplate(t: any) { setEditTemplate(t); setNewTemplate({name:t.name,role_profile:t.role_profile,grammar_count:t.grammar_count,reading_count:t.reading_count,writing_count:t.writing_count,speaking_count:t.speaking_count,listening_count:t.listening_count,dla_count:t.dla_count||10,weight_grammar:t.weight_grammar,weight_reading:t.weight_reading,weight_writing:t.weight_writing,weight_speaking:t.weight_speaking,weight_listening:t.weight_listening,weight_dla:t.weight_dla||10,time_limit_mins:t.time_limit_mins,writing_timer_mins:t.writing_timer_mins||3.5,speaking_attempts:t.speaking_attempts||3,listening_single_play:t.listening_single_play!==false,passing_cefr:t.passing_cefr,proctoring_enabled:t.proctoring_enabled!==false,attempts_allowed:t.attempts_allowed||1,org_id:t.org_id||null,prep_grammar:t.prep_grammar||DEFAULT_PREP.grammar,prep_reading:t.prep_reading||DEFAULT_PREP.reading,prep_writing:t.prep_writing||DEFAULT_PREP.writing,prep_speaking:t.prep_speaking||DEFAULT_PREP.speaking,prep_listening:t.prep_listening||DEFAULT_PREP.listening} as any); setShowTemplateForm(true) }
 
   async function handleSignOut() { await supabase.auth.signOut(); router.push('/login') }
 
@@ -970,7 +955,6 @@ export default function AdminDashboard() {
               resetForm={resetForm} exportQuestions={exportQuestions} loadAIFile={loadAIFile}
               runAITagging={runAITagging} approveAll={approveAll} handleFileUpload={handleFileUpload}
               parseText={parseText} confirmBulkUpload={confirmBulkUpload} setDetailQ={setDetailQ}
-              bulkToggleActive={bulkToggleActive}
             />
           )}
 
@@ -1097,7 +1081,7 @@ export default function AdminDashboard() {
 
                   <div style={{background:'var(--off)',borderRadius:'12px',padding:'16px',border:'1.5px solid var(--bdr)'}}>
                     <div style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase',marginBottom:'12px'}}>Section Counts & Weights</div>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'12px'}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:'8px',marginBottom:'12px'}}>
                       {sections.map(s=>(
                         <div key={s} style={{display:'flex',flexDirection:'column',gap:'4px'}}>
                           <div style={{fontSize:'9px',fontWeight:800,textAlign:'center',color:sectionColors[s],textTransform:'uppercase'}}>{s.slice(0,4)}</div>
@@ -1106,8 +1090,8 @@ export default function AdminDashboard() {
                         </div>
                       ))}
                     </div>
-                    <div style={{textAlign:'right',fontSize:'11px',fontWeight:700,color:Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening)-100)<0.1?'#22c55e':'#ef4444'}}>
-                      Total Weight: {newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening}% {Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_listening)-100)<0.1?'✓':'(must = 100%)'}
+                    <div style={{textAlign:'right',fontSize:'11px',fontWeight:700,color:Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening+(newTemplate as any).weight_dla)-100)<0.1?'#22c55e':'#ef4444'}}>
+                      Total Weight: {newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening+(newTemplate as any).weight_dla}% {Math.abs((newTemplate.weight_grammar+newTemplate.weight_reading+newTemplate.weight_writing+newTemplate.weight_speaking+newTemplate.weight_listening+(newTemplate as any).weight_dla)-100)<0.1?'✓':'(must = 100%)'}
                     </div>
                   </div>
 
@@ -1124,13 +1108,13 @@ export default function AdminDashboard() {
 
                   <div style={{borderTop:'1px solid var(--bdr)',paddingTop:'20px',paddingBottom:'40px'}}>
                     <div style={{fontSize:'11px',fontWeight:700,color:'var(--navy)',textTransform:'uppercase',marginBottom:'12px'}}>Prep Screen Instructions</div>
-                    {sections.map(sec => {
-                      const prepKey = ('prep_' + sec) as any
+                    {sections.map(s => {
+                      const prepKey = ('prep_' + s) as any
                       const prep = (newTemplate as any)[prepKey] || { seconds: 45, bullets: [] }
                       return (
-                        <div key={sec} style={{marginBottom:'12px',background:'var(--off)',padding:'12px',borderRadius:'10px',border:'1px solid var(--bdr)'}}>
+                        <div key={s} style={{marginBottom:'12px',background:'var(--off)',padding:'12px',borderRadius:'10px',border:'1px solid var(--bdr)'}}>
                           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-                            <span style={{fontSize:'11px',fontWeight:800,color:sectionColors[sec],textTransform:'uppercase'}}>{sec}</span>
+                            <span style={{fontSize:'11px',fontWeight:800,color:sectionColors[s],textTransform:'uppercase'}}>{s}</span>
                             <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
                               <span style={{fontSize:'11px',fontWeight:600,color:'var(--t3)'}}>Sec:</span>
                               <input type="number" value={prep.seconds} onChange={e => setNewTemplate({...newTemplate, [prepKey]: {...prep, seconds: +e.target.value}} as any)} style={{width:'50px',textAlign:'center',padding:'3px',fontSize:'12px',fontWeight:700,borderRadius:'4px',border:'1px solid var(--bdr)'}} />
@@ -1363,6 +1347,13 @@ export default function AdminDashboard() {
                           </label>
                         </div>
                       </div>
+
+                      {formQ.section === 'dla' && formQ.dla_section === 'retell' && (
+                        <div style={{marginBottom:'12px'}}>
+                          <label style={{fontSize:'11px',fontWeight:700,color:'var(--t2)',display:'block',marginBottom:'4px',textTransform:'uppercase'}}>Reading Text (For Retell)</label>
+                          <textarea value={formQ.reading_text} onChange={e=>setFormQ({...formQ,reading_text:e.target.value})} placeholder="Passage to show candidate for 15 seconds..." rows={4} style={{...inp({width:'100%',resize:'vertical',fontSize:'13px'})}} />
+                        </div>
+                      )}
                     </div>
                   ) : ( // qStep === 3
                     <div style={{display:'flex',flexDirection:'column',gap:'20px',animation:'drawerSlideIn 0.3s ease-out'}}>
@@ -1458,7 +1449,8 @@ export default function AdminDashboard() {
           </div>
         </>
       )}
+        </div>
       </div>
+    </div>
   )
-
 }

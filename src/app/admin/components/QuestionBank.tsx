@@ -72,7 +72,6 @@ interface QuestionBankProps {
   parseText: (t: string) => any[]
   confirmBulkUpload: () => void
   setDetailQ: (q: any) => void
-  bulkToggleActive: (active: boolean) => void
 }
 
 export default function QuestionBank(props: QuestionBankProps) {
@@ -87,8 +86,7 @@ export default function QuestionBank(props: QuestionBankProps) {
     setBulkLoading, setBulkSection, setBulkCefr, setBulkDifficulty,
     applyFilters, runQuery, toggleSelect, toggleSelectAll, toggleActive,
     startSingleDelete, startBulkDelete, startEdit, resetForm, exportQuestions,
-    loadAIFile, runAITagging, approveAll, handleFileUpload, parseText, confirmBulkUpload, setDetailQ,
-    bulkToggleActive
+    loadAIFile, runAITagging, approveAll, handleFileUpload, parseText, confirmBulkUpload, setDetailQ
   } = props
 
   const sections = ['grammar','reading','writing','speaking','listening','dla']
@@ -101,7 +99,7 @@ export default function QuestionBank(props: QuestionBankProps) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const inp = (extra:any={}) => ({
-    padding:'10px 14px', borderRadius:'10px', border:'1.5px solid var(--bdr)',
+    padding:'10px 14px', borderRadius:'10px', border:'1.5px solid var(--bdr)', 
     fontSize:'13.5px', fontWeight:600, color:'var(--navy)', outline:'none',
     background:'#fff', transition:'all 0.2s', fontFamily:'var(--fb)',
     ...extra
@@ -126,11 +124,9 @@ export default function QuestionBank(props: QuestionBankProps) {
           </div>
           <div style={{display:'flex',gap:'12px',alignItems:'center'}}>
             {selectedQIds.length > 0 && (
-              <div style={{display:'flex',gap:'8px',padding:'4px 8px',background:'rgba(0,0,0,0.05)',borderRadius:'12px'}}>
-                <button onClick={() => bulkToggleActive(true)} style={{padding:'8px 14px',borderRadius:'8px',border:'none',background:'#16A34A',color:'#fff',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>Activate</button>
-                <button onClick={() => bulkToggleActive(false)} style={{padding:'8px 14px',borderRadius:'8px',border:'none',background:'#64748B',color:'#fff',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>Passive</button>
-                <button onClick={startBulkDelete} style={{padding:'8px 14px',borderRadius:'8px',border:'none',background:'#DC2626',color:'#fff',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>Delete {selectedQIds.length}</button>
-              </div>
+              <button onClick={startBulkDelete} style={{padding:'10px 18px',borderRadius:'10px',border:'none',background:'#DC2626',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer',fontFamily:'var(--fb)',boxShadow:'0 4px 12px rgba(220,38,38,0.2)'}}>
+                🗑 Delete {selectedQIds.length}
+              </button>
             )}
             <button onClick={()=>{resetForm();setShowForm(true);setShowBulk(false);setShowAI(false)}} style={{padding:'12px 24px',borderRadius:'12px',border:'none',background:'linear-gradient(135deg, var(--navy) 0%, #1e3a8a 100%)',color:'#fff',fontSize:'14px',fontWeight:700,cursor:'pointer',fontFamily:'var(--fb)',boxShadow:'0 8px 20px rgba(15,23,42,0.15)',transition:'transform 0.2s'}} onMouseOver={e=>e.currentTarget.style.transform='translateY(-2px)'} onMouseOut={e=>e.currentTarget.style.transform='translateY(0)'}>
               + Add Question
@@ -258,10 +254,7 @@ export default function QuestionBank(props: QuestionBankProps) {
                 alignItems:'center'
               }}>
                 <div style={{display:'flex',alignItems:'center',gap:'12px',minWidth:'55px'}}>
-                  <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
-                    <input type="checkbox" checked={selectedQIds.includes(q.id)} onChange={()=>toggleSelect(q.id)} style={{width:'18px',height:'18px',cursor:'pointer',accentColor:'var(--navy)'}} />
-                    {i === 0 && <button onClick={toggleSelectAll} style={{background:'none',border:'none',fontSize:'9px',fontWeight:800,color:'var(--sky)',cursor:'pointer',padding:0}}>ALL</button>}
-                  </div>
+                  <input type="checkbox" checked={selectedQIds.includes(q.id)} onChange={()=>toggleSelect(q.id)} style={{width:'18px',height:'18px',cursor:'pointer',accentColor:'var(--navy)'}} />
                   <div style={{width:'40px',height:'40px',borderRadius:'10px',background:(sectionColors[q.section]||'#888')+'15',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px'}}>
                     {q.section==='grammar'?'🔤':q.section==='reading'?'📖':q.section==='listening'?'🎧':q.section==='speaking'?'🗣':q.section==='writing'?'✍️':q.section==='dla'?'✈️':'❓'}
                   </div>
