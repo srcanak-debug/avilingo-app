@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { PILOT_COURSE_SEED } from '@/lib/data/pilot-seed'
+import { WXR_2100_COURSE } from '@/lib/data/courses/boeing-wxr-2100'
 
 interface Course {
   id: string
@@ -14,6 +15,15 @@ interface Course {
 
 export default function CourseLibrary() {
   const [courses, setCourses] = useState<Course[]>([
+    {
+      id: WXR_2100_COURSE.id,
+      title: WXR_2100_COURSE.title,
+      category: 'Pilot > General Subject',
+      format: 'AI-Generated',
+      duration: WXR_2100_COURSE.duration,
+      enrolled: 0,
+      status: 'active'
+    },
     ...PILOT_COURSE_SEED.map((p, idx) => ({
       id: `p-${idx}`,
       title: p.title,
