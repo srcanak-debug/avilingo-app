@@ -72,6 +72,7 @@ interface QuestionBankProps {
   parseText: (t: string) => any[]
   confirmBulkUpload: () => void
   setDetailQ: (q: any) => void
+  bulkToggleActive: (active: boolean) => Promise<void>
 }
 
 export default function QuestionBank(props: QuestionBankProps) {
@@ -86,7 +87,8 @@ export default function QuestionBank(props: QuestionBankProps) {
     setBulkLoading, setBulkSection, setBulkCefr, setBulkDifficulty,
     applyFilters, runQuery, toggleSelect, toggleSelectAll, toggleActive,
     startSingleDelete, startBulkDelete, startEdit, resetForm, exportQuestions,
-    loadAIFile, runAITagging, approveAll, handleFileUpload, parseText, confirmBulkUpload, setDetailQ
+    loadAIFile,    runAITagging, approveAll, handleFileUpload, parseText, confirmBulkUpload, setDetailQ,
+    bulkToggleActive
   } = props
 
   const sections = ['grammar','reading','writing','speaking','listening','dla']
@@ -133,6 +135,23 @@ export default function QuestionBank(props: QuestionBankProps) {
             </button>
           </div>
         </div>
+
+        {/* Bulk Action Bar */}
+        {selectedQIds.length > 0 && (
+          <div style={{
+            background:'#fff', borderRadius:'12px', padding:'12px 20px', marginBottom:'20px', 
+            border:'1.5px solid var(--sky)', display:'flex', alignItems:'center', justifyContent:'space-between',
+            animation:'drawerSlideIn 0.3s ease-out', boxShadow:'0 10px 25px rgba(56,189,248,0.1)'
+          }}>
+            <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+              <span style={{fontSize:'13px',fontWeight:700,color:'var(--navy)'}}>{selectedQIds.length} Questions Selected</span>
+              <div style={{width:'1px',height:'20px',background:'var(--bdr)'}} />
+              <button onClick={()=>bulkToggleActive(true)} style={{padding:'6px 14px',borderRadius:'8px',border:'1px solid #16A34A',background:'#F0FDF4',color:'#16A34A',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>Activate</button>
+              <button onClick={()=>bulkToggleActive(false)} style={{padding:'6px 14px',borderRadius:'8px',border:'1px solid #64748B',background:'#F8FAFC',color:'#64748B',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>Passive</button>
+            </div>
+            <button onClick={()=>setSelectedQIds([])} style={{background:'none',border:'none',color:'var(--t3)',fontSize:'12px',fontWeight:700,cursor:'pointer'}}>Deselect All</button>
+          </div>
+        )}
 
         <div style={{fontSize:'13px',color:'var(--t3)',marginBottom:'16px',display:'flex',justifyContent:'space-between',alignItems:'center',padding:'0 4px'}}>
           <span>Showing <b>{qTotal.toLocaleString()}</b> professional questions</span>
