@@ -409,7 +409,13 @@ export default function AdminDashboard() {
     else if (sort === 'usage') query = query.order('usage_count', {ascending:false})
     else if (sort === 'cefr') query = query.order('cefr_level', {ascending:true})
 
-    const { data, count } = await query
+    const { data, count, error } = await query
+    
+    if (error) {
+      console.error('❌ Supabase Soru Çekme Hatası:', error)
+      alert('Soru bankası yüklenirken bir hata oluştu: ' + error.message)
+    }
+
     setQuestions(data||[])
     setQTotal(count||0)
     setQLoading(false)
