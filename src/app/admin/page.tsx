@@ -34,6 +34,10 @@ const AuditSystem = dynamic(() => import('./components/audit/AuditSystem'))
 const ContentTransformer = dynamic(() => import('./components/ai/ContentTransformer'))
 const QuestionGenerator = dynamic(() => import('./components/ai/QuestionGenerator'))
 
+// Virtual & VR Components
+const LiveClassroom = dynamic(() => import('./components/virtual/LiveClassroom'))
+const Virtual360 = dynamic(() => import('./components/virtual/Virtual360'))
+
 interface NavItem {
   id: string
   label: string
@@ -54,6 +58,13 @@ const navGroups: NavGroup[] = [
       { id: 'questions', label: 'Question Bank', icon: '📚' },
       { id: 'templates', label: 'Exam Templates', icon: '📋' },
       { id: 'reports', label: 'Reports', icon: '📈' },
+    ]
+  },
+  {
+    label: 'Virtual & VR (Eğitim)',
+    items: [
+      { id: 'live_class', label: 'Live Classroom', icon: '📹' },
+      { id: 'vr_360', label: '360° Walkthrough', icon: '🥽' },
     ]
   },
   {
@@ -877,6 +888,9 @@ export default function AdminDashboard() {
           
           {activeSection === 'ai_transform' && <ContentTransformer />}
           {activeSection === 'ai_gen' && <QuestionGenerator />}
+
+          {activeSection === 'live_class' && <LiveClassroom />}
+          {activeSection === 'vr_360' && <Virtual360 />}
 
           {activeSection === 'questions' && (
             <QuestionBank 
