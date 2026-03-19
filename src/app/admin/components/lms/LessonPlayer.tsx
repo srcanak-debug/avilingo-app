@@ -142,7 +142,7 @@ export default function LessonPlayer() {
              </div>
 
              <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '24px' }}>
-                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 700 }}>Standard: {activeCourse.authoritative_sources?.[0]}</span>
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px', fontWeight: 700 }}>Standard: {activeCourse.authoritative_sources?.[0] || 'ICAO/EASA'}</span>
                 <span style={{ color: '#3b82f6', fontSize: '11px', fontWeight: 800 }}>AVILINGO CERTIFIED TRAINING</span>
              </div>
           </div>
