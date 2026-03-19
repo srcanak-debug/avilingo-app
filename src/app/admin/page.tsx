@@ -276,11 +276,18 @@ export default function AdminDashboard() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
     
-    const { data } = await supabase.from('users').select('*').eq('id', user.id).single()
-    if (!data || data.role !== 'super_admin') { router.push('/login'); return }
+    // Use API route (service role) to bypass recursive RLS policy
+    const res = await fetch('/api/get-role', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id })
+    })
+    const { role, email, full_name } = await res.json()
+
+    if (!role || role !== 'super_admin') { router.push('/login'); return }
     
     setAdminId(user.id)
-    setAdminName(data.full_name || 'Super Admin')
+    setAdminName(full_name || 'Super Admin')
     setAdminEmail(user.email || 'admin@domain.com')
     setLoading(false)
   }

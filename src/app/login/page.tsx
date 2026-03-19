@@ -15,23 +15,24 @@ export default function Login() {
     setError('')
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) { setError(error.message); setLoading(false); return }
-    
-    const { data: userData, error: userErr } = await supabase
-      .from('users')
-      .select('role')
-      .eq('id', data.user.id)
-      .single()
 
-    let role = userData?.role
-
-    // Auto-heal missing public.users row (if created manually in Auth)
-    if (!userData && (!userErr || userErr.code === 'PGRST116')) { // PGRST116 = 0 rows
-      await supabase.from('users').insert({
-        id: data.user.id,
-        email: email,
-        full_name: email.split('@')[0],
-        role: 'candidate'
+    // Use API route (service role key) to bypass RLS and get role reliably
+    let role: string | null = null
+    try {
+      const res = await fetch('/api/get-role', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: data.user.id })
       })
+      const json = await res.json()
+      role = json.role
+    } catch {
+      role = null
+    }
+
+    // Auto-heal: if no user row found, create as candidate
+    if (!role) {
+      await fetch('/api/get-role', { method: 'POST', body: JSON.stringify({ userId: data.user.id }) })
       role = 'candidate'
     }
 
