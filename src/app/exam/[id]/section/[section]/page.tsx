@@ -93,7 +93,7 @@ export default function ExamSectionPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
-      const { data: ed, error: edErr } = await supabase.from('exams').select('*,exam_templates(*)').eq('id', examId).eq('candidate_id', user.id).single()
+      const { data: ed, error: edErr } = await supabase.from('exams').select('*,exam_templates(*),users!exams_candidate_id_fkey(full_name, email)').eq('id', examId).eq('candidate_id', user.id).single()
       if (edErr) { console.error('Exam Error:', edErr); return router.push('/exam'); }
       if (!ed || ed.status === 'invalidated') return router.push('/exam')
       if (ed.status === 'completed') return router.push(`/exam/${examId}/complete`)
@@ -405,7 +405,23 @@ export default function ExamSectionPage() {
     const order = (ROLE_ORDER[role] || ROLE_ORDER.general).filter((s: string) => (t?.[`${s}_count`] || 0) > 0)
     const next = order[order.indexOf(section) + 1]
     if (next) router.push(`/exam/${examId}/section/${next}`)
-    else { cam?.getTracks().forEach(t => t.stop()); await supabase.from('exams').update({ status:'completed', completed_at: new Date().toISOString() }).eq('id', examId); router.push(`/exam/${examId}/complete`) }
+    else { 
+      cam?.getTracks().forEach(t => t.stop()); 
+      await supabase.from('exams').update({ status:'completed', completed_at: new Date().toISOString() }).eq('id', examId);
+      
+      // Trigger Completion Notification
+      fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          exams: [{ id: examId, candidate_email: exam.users?.email, candidate_name: exam.users?.full_name }],
+          templateName: exam.exam_templates?.name,
+          type: 'EXAM_COMPLETED'
+        })
+      }).catch(e => console.warn('Notification error:', e))
+
+      router.push(`/exam/${examId}/complete`) 
+    }
   }
 
   async function finishExam() {
@@ -418,6 +434,18 @@ export default function ExamSectionPage() {
     cam?.getTracks().forEach(t => t.stop())
     ;[gTimer,qTimer,pTimer,spTimer,rTimer,lTimer,wTimer].forEach(r => clearInterval(r.current))
     await supabase.from('exams').update({ status:'completed', completed_at: new Date().toISOString() }).eq('id', examId)
+    
+    // Trigger Completion Notification
+    fetch('/api/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        exams: [{ id: examId, candidate_email: exam.users?.email, candidate_name: exam.users?.full_name }],
+        templateName: exam.exam_templates?.name,
+        type: 'EXAM_COMPLETED'
+      })
+    }).catch(e => console.warn('Notification error:', e))
+
     setSaving(false)
     router.push(`/exam/${examId}/complete`)
   }

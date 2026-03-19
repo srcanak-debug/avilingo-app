@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import ExamWizard from './ExamWizard'
 
 interface ActiveExamsProps {
   adminId: string
@@ -11,24 +12,12 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
-  const [editingExam, setEditingExam] = useState<any>(null)
-  const [rescheduleDate, setRescheduleDate] = useState('')
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [isWizardOpen, setIsWizardOpen] = useState(false)
+  const [wizardEditId, setWizardEditId] = useState<string | null>(null)
   const [templates, setTemplates] = useState<any[]>([])
   const [orgs, setOrgs] = useState<any[]>([])
   const [candidates, setCandidates] = useState<any[]>([])
   
-  // Create Form State
-  const [newExam, setNewExam] = useState({
-    template_id: '',
-    org_id: '',
-    candidate_id: '',
-    scheduled_for: new Date().toISOString().split('T')[0],
-    end_date: '',
-    language: 'English',
-    field_area: 'General'
-  })
-
   const loadExams = useCallback(async () => {
     setLoading(true)
     let query = supabase
@@ -48,18 +37,8 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
     setLoading(false)
   }, [filter])
 
-  const loadInitialData = useCallback(async () => {
-    const { data: tpls } = await supabase.from('exam_templates').select('*')
-    const { data: os } = await supabase.from('organizations').select('*')
-    const { data: usrs } = await supabase.from('users').select('*').eq('role', 'candidate')
-    setTemplates(tpls || [])
-    setOrgs(os || [])
-    setCandidates(usrs || [])
-  }, [])
-
   useEffect(() => {
     loadExams()
-    loadInitialData()
 
     const channel = supabase
       .channel('schema-db-changes')
@@ -73,26 +52,7 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [filter, loadExams, loadInitialData])
-
-  async function handleCreateExam() {
-    if (!newExam.template_id || !newExam.candidate_id || !newExam.org_id) {
-       alert('Lütfen tüm zorunlu alanları doldurun.')
-       return
-    }
-
-    const { error } = await supabase.from('exams').insert({
-      ...newExam,
-      status: 'scheduled',
-      created_at: new Date().toISOString()
-    })
-
-    if (error) alert(error.message)
-    else {
-      setShowCreateModal(false)
-      loadExams()
-    }
-  }
+  }, [filter, loadExams])
 
   async function updateStatus(id: string, updates: any) {
     const { error } = await supabase
@@ -139,7 +99,7 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
       {/* Top Action Bar */}
       <div style={{ display: 'flex', gap: '16px', marginBottom: '32px', alignItems: 'center' }}>
         <button 
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => { setWizardEditId(null); setIsWizardOpen(true); }}
           style={{
             padding: '12px 24px',
             background: 'var(--sky)',
@@ -297,7 +257,7 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
                   <ActionButton sm icon="🔴" label={isPassive ? "Aktif Yap" : "Pasif Yap"} border onClick={() => updateStatus(exam.id, { status: isPassive ? 'scheduled' : 'cancelled' })} />
                   <ActionButton sm icon={isPublic ? "🛡️" : "🌐"} label={isPublic ? "Private" : "Public"} border onClick={() => updateStatus(exam.id, { is_public: !isPublic })} />
                   <ActionButton sm icon={isLocked ? "🔓" : "🔒"} label={isLocked ? "Kilidi Aç" : "Kilitle"} border onClick={() => updateStatus(exam.id, { is_locked: !isLocked })} />
-                  <ActionButton sm icon="⚙️" label="Ayarlar" border onClick={() => { setEditingExam(exam); setRescheduleDate(new Date(exam.scheduled_for || exam.created_at).toISOString().split('T')[0]) }} />
+                  <ActionButton sm icon="⚙️" label="Ayarlar" border onClick={() => { setWizardEditId(exam.template_id); setIsWizardOpen(true); }} />
                   <ActionButton sm icon="🗑️" label="Sınavı Sil" border color="#EF4444" onClick={() => deleteExam(exam.id)} />
                 </div>
               </div>
@@ -306,49 +266,13 @@ export default function ActiveExams({ adminId }: ActiveExamsProps) {
         </div>
       )}
 
-      {/* Create Exam Modal */}
-      {showCreateModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(12,31,63,0.5)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000 }}>
-          <div style={{ background: '#fff', borderRadius: '32px', width: '500px', padding: '40px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--navy)', marginBottom: '8px' }}>Yeni Sınav Oluştur</h2>
-            <p style={{ fontSize: '14px', color: 'var(--t3)', marginBottom: '32px' }}>Aday için yeni bir sınav oturumu planlayın.</p>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <Select label="Sınav Şablonu" value={newExam.template_id} onChange={(v: string) => setNewExam({...newExam, template_id: v})} options={templates.map(t => ({ label: t.name, value: t.id }))} />
-              <Select label="Kurum / Organizasyon" value={newExam.org_id} onChange={(v: string) => setNewExam({...newExam, org_id: v})} options={orgs.map(o => ({ label: o.name, value: o.id }))} />
-              <Select label="Aday Seç" value={newExam.candidate_id} onChange={(v: string) => setNewExam({...newExam, candidate_id: v})} options={candidates.map(c => ({ label: c.full_name, value: c.id }))} />
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <Input type="date" label="Başlangıç Tarihi" value={newExam.scheduled_for} onChange={(v: string) => setNewExam({...newExam, scheduled_for: v})} />
-                <Input type="date" label="Bitiş Tarihi" value={newExam.end_date} onChange={(v: string) => setNewExam({...newExam, end_date: v})} />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '40px' }}>
-              <button onClick={() => setShowCreateModal(false)} style={{ flex: 1, padding: '16px', borderRadius: '16px', border: '1.5px solid var(--bdr)', background: '#fff', color: 'var(--t2)', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>Vazgeç</button>
-              <button onClick={handleCreateExam} style={{ flex: 1, padding: '16px', borderRadius: '16px', border: 'none', background: 'var(--navy)', color: '#fff', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}>Sınavı Oluştur</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Settings / Reschedule Modal */}
-      {editingExam && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(12,31,63,0.5)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000 }}>
-          <div style={{ background: '#fff', borderRadius: '32px', width: '450px', padding: '40px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 900, color: 'var(--navy)', marginBottom: '8px' }}>Sınav Ayarlarını Düzenle</h2>
-            <p style={{ fontSize: '14px', color: 'var(--t3)', marginBottom: '32px' }}>{editingExam.exam_templates?.name} için ayarları güncelleyin.</p>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <Input type="date" label="Yeni Başlangıç Tarihi" value={rescheduleDate} onChange={(v: string) => setRescheduleDate(v)} />
-              <Select label="Dil Seçimi" value={editingExam.language || 'English'} onChange={(v: string) => console.log(v)} options={[{label: 'English', value: 'English'}, {label: 'Turkish', value: 'Turkish'}]} />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '40px' }}>
-              <button onClick={() => setEditingExam(null)} style={{ flex: 1, padding: '16px', borderRadius: '16px', border: '1.5px solid var(--bdr)', background: '#fff', color: 'var(--t2)', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>Vazgeç</button>
-              <button onClick={() => { updateStatus(editingExam.id, { scheduled_for: rescheduleDate }); setEditingExam(null); }} style={{ flex: 1, padding: '16px', borderRadius: '16px', border: 'none', background: 'var(--navy)', color: '#fff', fontSize: '14px', fontWeight: 800, cursor: 'pointer' }}>Değişiklikleri Kaydet</button>
-            </div>
-          </div>
+      {/* Exam Creation / Edit Wizard Overlay */}
+      {isWizardOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: '#fff', zIndex: 9999, overflowY: 'auto' }}>
+          <ExamWizard 
+            onClose={() => { setIsWizardOpen(false); setWizardEditId(null); loadExams(); }} 
+            editId={wizardEditId}
+          />
         </div>
       )}
     </div>

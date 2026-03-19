@@ -12,7 +12,7 @@ const supabaseAdmin = createClient(
 
 export async function POST(req: Request) {
   try {
-    const { exams, templateName, message } = await req.json()
+    const { exams, templateName, message, type = 'EXAM_INVITE' } = await req.json()
 
     if (!exams || !exams.length) {
       return NextResponse.json({ success: false, error: 'No exams provided' }, { status: 400 })
@@ -20,81 +20,116 @@ export async function POST(req: Request) {
 
     if (!process.env.RESEND_API_KEY) {
       console.warn('⚠️ RESEND_API_KEY is missing. Emails will not be actually sent.')
-      console.log('Simulating sending emails to:', exams.map((e: any) => e.candidate_email))
+      console.log(`Simulating [${type}] emails to:`, exams.map((e: any) => e.candidate_email))
       return NextResponse.json({ success: true, simulated: true })
     }
 
-    const { data: { user } } = await supabaseAdmin.auth.getUser()
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://avilingo.com'
 
-    // Process all invitations in parallel
     const emailPromises = exams.map(async (exam: any) => {
-      // Generate a magic link for the candidate that redirects to the exam preflight page
-      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'magiclink',
-        email: exam.candidate_email,
-        options: {
-          redirectTo: `${appUrl}/exam/${exam.id}/preflight`
-        }
-      })
+      let subject = ''
+      let html = ''
+      let magicLink = ''
 
-      const magicLink = linkData?.properties?.action_link || `${appUrl}/exam/${exam.id}/preflight`
+      // Helper to generate magic link if needed
+      const getLink = async () => {
+        const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'magiclink',
+          email: exam.candidate_email,
+          options: { redirectTo: `${appUrl}/exam/${exam.id}/preflight` }
+        })
+        return linkData?.properties?.action_link || `${appUrl}/exam/${exam.id}/preflight`
+      }
+
+      switch (type) {
+        case 'REGISTRATION_RECEIVED':
+          subject = `Avilingo: ${templateName} Sınav Kaydınız Alındı`
+          html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
+              <div style="background: #0C1F3F; padding: 30px; text-align: center;">
+                <h1 style="color: #fff; margin:0;">Avilingo</h1>
+              </div>
+              <div style="padding: 40px 30px;">
+                <h2>Sayın ${exam.candidate_name},</h2>
+                <p><strong>${templateName}</strong> için kaydınız başarıyla alınmıştır.</p>
+                <p>E-posta adresiniz doğrulanmıştır. Sınavınız hazır olduğunda size yeni bir bilgilendirme gönderilecektir.</p>
+                <p>Başarılar dileriz.</p>
+              </div>
+            </div>
+          `
+          break;
+
+        case 'EXAM_INVITE':
+        default:
+          magicLink = await getLink()
+          subject = `Avilingo Exam Invitation: ${templateName}`
+          html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
+              <div style="background: #0C1F3F; padding: 30px; text-align: center;">
+                <h1 style="color: #fff; margin:0;">Avilingo</h1>
+              </div>
+              <div style="padding: 40px 30px;">
+                <h2>Hello ${exam.candidate_name},</h2>
+                <p>You have been invited to take the <strong>${templateName}</strong> exam.</p>
+                ${message ? `<div style="background: #f4f4f4; padding: 15px; border-left: 4px solid #0EA5E9; margin: 20px 0;">${message}</div>` : ''}
+                <div style="text-align: center; margin-top: 30px;">
+                  <a href="${magicLink}" style="background: #0EA5E9; color: #fff; padding: 15px 30px; text-decoration: none; borderRadius: 8px; font-weight: bold; display: inline-block;">Start Exam Now</a>
+                </div>
+              </div>
+            </div>
+          `
+          break;
+
+        case 'EXAM_COMPLETED':
+          subject = `Avilingo: ${templateName} Sınavınız Tamamlandı`
+          html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
+              <div style="background: #0C1F3F; padding: 30px; text-align: center;">
+                <h1 style="color: #fff; margin:0;">Avilingo</h1>
+              </div>
+              <div style="padding: 40px 30px;">
+                <h2>Tebrikler ${exam.candidate_name}!</h2>
+                <p><strong>${templateName}</strong> sınavını başarıyla tamamladınız.</p>
+                <p>Sonuçlarınız değerlendirildikten sonra tarafınıza bilgilendirme yapılacaktır.</p>
+              </div>
+            </div>
+          `
+          break;
+
+        case 'RESULTS_READY':
+          subject = `Avilingo: ${templateName} Sınav Sonucunuz Hazır`
+          html = `
+             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
+              <div style="background: #0C1F3F; padding: 30px; text-align: center;">
+                <h1 style="color: #fff; margin:0;">Avilingo</h1>
+              </div>
+              <div style="padding: 40px 30px;">
+                <h2>Sonuçlarınız Hazır, ${exam.candidate_name}!</h2>
+                <p><strong>${templateName}</strong> sınavına ait detaylı raporunuzu görüntülemek için sisteme giriş yapabilirsiniz.</p>
+                <div style="text-align: center; margin-top: 30px;">
+                  <a href="${appUrl}/dashboard" style="background: #10B981; color: #fff; padding: 15px 30px; text-decoration: none; borderRadius: 8px; font-weight: bold; display: inline-block;">Sonuçları Görüntüle</a>
+                </div>
+              </div>
+            </div>
+          `
+          break;
+      }
 
       return resend.emails.send({
-        from: 'Avilingo Exams <exams@avilingo.com>', // Replace with verified domain
+        from: 'Avilingo Exams <exams@avilingo.com>',
         to: exam.candidate_email,
-        subject: `You have been invited to take the ${templateName} Exam`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eaeaea; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-            <div style="background-color: #0C1F3F; padding: 24px; text-align: center;">
-              <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 1px;">Avil<span style="color: #5AAEDF;">ingo</span></h1>
-            </div>
-            <div style="padding: 32px 24px; background-color: #ffffff;">
-              <h2 style="color: #0C1F3F; margin-top: 0;">Hello ${exam.candidate_name || 'Candidate'},</h2>
-              <p style="color: #4B5563; line-height: 1.6; font-size: 15px;">
-                You have been assigned to complete the <strong>${templateName}</strong> assessment.
-              </p>
-              
-              ${message ? `
-                <div style="background-color: #f3f4f6; padding: 16px; border-left: 4px solid #3A8ED0; border-radius: 4px; margin: 24px 0; color: #374151; font-style: italic;">
-                  "${message.replace(/\n/g, '<br/>')}"
-                </div>
-              ` : ''}
-
-              <p style="color: #4B5563; line-height: 1.6; font-size: 15px; margin-bottom: 32px;">
-                Please ensure you are in a quiet environment with a working microphone and camera before starting the exam.
-              </p>
-
-              <div style="text-align: center;">
-                <a href="${magicLink}" style="display: inline-block; background-color: #3A8ED0; color: #ffffff; font-weight: bold; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 16px;">
-                  Start Exam Now
-                </a>
-              </div>
-              
-              <p style="color: #9CA3AF; font-size: 13px; text-align: center; margin-top: 32px;">
-                Or copy this link to your browser:<br/>
-                <a href="${magicLink}" style="color: #3A8ED0; word-break: break-all;">${magicLink}</a>
-              </p>
-            </div>
-            <div style="background-color: #f9fafb; padding: 16px; text-align: center; border-top: 1px solid #eaeaea; color: #9CA3AF; font-size: 12px;">
-              © ${new Date().getFullYear()} Avilingo Aviation English. All rights reserved.
-            </div>
-          </div>
-        `
+        subject,
+        html
       })
     })
 
     const results = await Promise.allSettled(emailPromises)
     const failures = results.filter(r => r.status === 'rejected')
 
-    if (failures.length > 0) {
-      console.error('Some emails failed to send:', failures)
-    }
-
     return NextResponse.json({ success: true, sent: results.length - failures.length, failures: failures.length })
 
   } catch (error: any) {
-    console.error('Error sending invitations:', error)
+    console.error('Error sending notifications:', error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
