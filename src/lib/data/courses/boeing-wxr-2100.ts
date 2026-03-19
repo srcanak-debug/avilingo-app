@@ -5,40 +5,46 @@
 
 export const WXR_2100_COURSE = {
   id: 'wxr-2100-boeing',
-  title: 'WXR-2100 Weather Radar (Boeing)',
+  title: 'WXR-2100 MultiScan™ Weather Radar (Boeing Masterclass)',
   category: 'General Subject Courses',
-  aircraft: 'Boeing',
-  duration: '13:51',
-  slides: 48,
-  exam: false,
+  aircraft: 'Boeing (B737/B777/B787)',
+  duration: '22:30',
+  slides: 64,
+  exam: true,
   outline: [
-    { title: 'COURSE START', type: 'intro' },
-    { title: 'WXR-2100 WEATHER RADAR (BOEING)', type: 'title' },
+    { title: '1. SYSTEM OVERVIEW', type: 'intro' },
     { 
-      title: 'WEATHER RADAR', 
+      title: '2. AUTOMATIC MULTISCAN™ LOGIC', 
       subpoints: [
-        'Tilt Management: Adjusting the beam to avoid ground clutter while scanning cells.',
-        'Gain Management: Fine-tuning sensitivity for accurate precipitation intensity.',
-        'Range Management: Strategic use of 40NM to 160NM scales for tactical and strategic planning.'
+        'How MultiScan technology merges two 12° beams into a single tactical picture.',
+        'Ground Clutter Suppression (GCS) algorithms and terrain database integration.',
+        'Auto-Tilt vs Manual: When to trust the system in convective weather.'
       ]
     },
     { 
-      title: 'PREDICTIVE WINDSHEAR', 
+      title: '3. TACTICAL TILT & GAIN MANAGEMENT', 
       subpoints: [
-        'Warning/Caution logic below 1200ft RA.',
-        'Aural alerts: "WINDSHEAR AHEAD"',
-        'Visual icons on ND (Navigation Display).'
+        'Strategic scanning: Using 60-80NM range to identify cell height.',
+        'The 1:1 Rule: Estimating cell base and top using tilt angles.',
+        'Calibrated (CAL) vs Manual Gain: Identifying the "Core" of a thunderstorm.'
       ]
     },
     { 
-      title: 'OPERATIONAL RECOMMENDATIONS', 
+      title: '4. PATH ATTENUATION & SHADOWING', 
       subpoints: [
-        'Tilt Management (Auto vs Manual)',
-        'Gain Management (CAL vs MAN)',
-        'Range Management (Scale selection)',
-        'Other Considerations (Shadowing, Path Attenuation)'
+        'The "Radar Shadow": Why a black hole behind a cell is a major threat.',
+        'PAC (Path Attenuation Compensation) alerts and limitations.',
+        'Reactive vs Proactive avoidance: The 20NM clearance rule.'
       ]
     },
-    { title: 'COURSE END', type: 'summary' }
+    { 
+      title: '5. PREDICTIVE WINDSHEAR (PWS)', 
+      subpoints: [
+        'Doppler shift measurement in moisture-rich environments.',
+        'Inhibition logic: Takeoff vs Approach phases.',
+        'Response procedures: TOGA/Windshear recovery actions.'
+      ]
+    },
+    { title: '6. FINAL EXAM & CERTIFICATION', type: 'exam' }
   ]
 };
